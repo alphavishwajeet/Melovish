@@ -64,8 +64,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
@@ -102,7 +100,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -1027,60 +1024,27 @@ fun ArtistsScreen(
                             SortListVector(tint = accentColor, modifier = Modifier.size(19.dp))
                         }
 
-                        // ⚡ Frosted Glassmorphic Dropdown Menu with Specular Diffusion
-                        val isDarkTheme = manager.isDarkMode
-                        val popupBaseScrim = (0.78f + (manager.frostedGlassOpacity * 0.20f)).coerceIn(0.70f, 0.98f)
-                        val popupSurfaceUnderlay = if (isDarkTheme) Color(0xFF0F172A).copy(alpha = popupBaseScrim) else Color(0xFFF8FAFC).copy(alpha = popupBaseScrim)
-                        val popupThemeSurface = manager.getCurrentDialogColor()
-
-                        MaterialTheme(
-                            colorScheme = MaterialTheme.colorScheme.copy(
-                                surface = Color.Transparent
-                            )
+                        // ⚡ Reusable Frosted Glassmorphic Dropdown Menu
+                        GlassmorphicDropdownMenu(
+                            expanded = showSortMenu,
+                            onDismissRequest = { showSortMenu = false },
+                            manager = manager
                         ) {
-                            DropdownMenu(
-                                expanded = showSortMenu,
-                                onDismissRequest = { showSortMenu = false },
-                                offset = DpOffset(0.dp, 8.dp),
-                                modifier = Modifier
-                                    .shadow(
-                                        elevation = 18.dp,
-                                        shape = RoundedCornerShape(18.dp),
-                                        spotColor = if (isDarkTheme) Color.Black.copy(alpha = 0.85f) else Color(0x55000000),
-                                        ambientColor = if (isDarkTheme) Color.Black else Color(0x33000000)
-                                    )
-                                    .clip(RoundedCornerShape(18.dp))
-                                    .background(popupSurfaceUnderlay)
-                                    .background(popupThemeSurface)
-                                    .border(1.3.dp, glassBorderBrush, RoundedCornerShape(18.dp))
-                                    .padding(vertical = 4.dp)
-                            ) {
-                                listOf(
-                                    Pair("Name (A to Z)", ArtistSortOrder.NAME_A_TO_Z),
-                                    Pair("Name (Z to A)", ArtistSortOrder.NAME_Z_TO_A),
-                                    Pair("Most Tracks", ArtistSortOrder.MOST_TRACKS),
-                                    Pair("Fewest Tracks", ArtistSortOrder.FEWEST_TRACKS)
-                                ).forEach { (label, order) ->
-                                    val isSelected = manager.artistsSortOrder == order
-                                    DropdownMenuItem(
-                                        text = {
-                                            Text(
-                                                text = label,
-                                                color = if (isSelected) accentColor else textColor,
-                                                fontSize = 14.sp,
-                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
-                                            )
-                                        },
-                                        onClick = {
-                                            manager.setPersistentArtistsSort(order)
-                                            showSortMenu = false
-                                        },
-                                        modifier = Modifier
-                                            .padding(horizontal = 6.dp, vertical = 2.dp)
-                                            .clip(RoundedCornerShape(10.dp))
-                                            .background(if (isSelected) accentColor.copy(alpha = 0.12f) else Color.Transparent)
-                                    )
-                                }
+                            listOf(
+                                Pair("Name (A to Z)", ArtistSortOrder.NAME_A_TO_Z),
+                                Pair("Name (Z to A)", ArtistSortOrder.NAME_Z_TO_A),
+                                Pair("Most Tracks", ArtistSortOrder.MOST_TRACKS),
+                                Pair("Fewest Tracks", ArtistSortOrder.FEWEST_TRACKS)
+                            ).forEach { (label, order) ->
+                                GlassDropdownMenuItem(
+                                    text = label,
+                                    isSelected = manager.artistsSortOrder == order,
+                                    manager = manager,
+                                    onClick = {
+                                        manager.setPersistentArtistsSort(order)
+                                        showSortMenu = false
+                                    }
+                                )
                             }
                         }
                     }
@@ -1538,61 +1502,28 @@ fun ArtistDetailScreen(
                             SortListVector(tint = accent, modifier = Modifier.size(18.dp))
                         }
 
-                        // ⚡ Frosted Glassmorphic Dropdown Menu with Specular Diffusion
-                        val isDarkTheme = manager.isDarkMode
-                        val popupBaseScrim = (0.78f + (manager.frostedGlassOpacity * 0.20f)).coerceIn(0.70f, 0.98f)
-                        val popupSurfaceUnderlay = if (isDarkTheme) Color(0xFF0F172A).copy(alpha = popupBaseScrim) else Color(0xFFF8FAFC).copy(alpha = popupBaseScrim)
-                        val popupThemeSurface = manager.getCurrentDialogColor()
-
-                        MaterialTheme(
-                            colorScheme = MaterialTheme.colorScheme.copy(
-                                surface = Color.Transparent
-                            )
+                        // ⚡ Reusable Frosted Glassmorphic Dropdown Menu
+                        GlassmorphicDropdownMenu(
+                            expanded = showSortMenu,
+                            onDismissRequest = { showSortMenu = false },
+                            manager = manager
                         ) {
-                            DropdownMenu(
-                                expanded = showSortMenu,
-                                onDismissRequest = { showSortMenu = false },
-                                offset = DpOffset(0.dp, 8.dp),
-                                modifier = Modifier
-                                    .shadow(
-                                        elevation = 18.dp,
-                                        shape = RoundedCornerShape(18.dp),
-                                        spotColor = if (isDarkTheme) Color.Black.copy(alpha = 0.85f) else Color(0x55000000),
-                                        ambientColor = if (isDarkTheme) Color.Black else Color(0x33000000)
-                                    )
-                                    .clip(RoundedCornerShape(18.dp))
-                                    .background(popupSurfaceUnderlay)
-                                    .background(popupThemeSurface)
-                                    .border(1.3.dp, glassBorderBrush, RoundedCornerShape(18.dp))
-                                    .padding(vertical = 4.dp)
-                            ) {
-                                listOf(
-                                    Pair("A to Z", SongSortOrder.A_TO_Z),
-                                    Pair("Z to A", SongSortOrder.Z_TO_A),
-                                    Pair("Duration", SongSortOrder.DURATION),
-                                    Pair("File Size", SongSortOrder.FILE_SIZE),
-                                    Pair("Newest First", SongSortOrder.NEWEST)
-                                ).forEach { (label, order) ->
-                                    val isSelected = manager.artistInnerSortOrder == order
-                                    DropdownMenuItem(
-                                        text = {
-                                            Text(
-                                                text = label,
-                                                color = if (isSelected) accent else textColor,
-                                                fontSize = 14.sp,
-                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
-                                            )
-                                        },
-                                        onClick = {
-                                            manager.setPersistentArtistInnerSort(order)
-                                            showSortMenu = false
-                                        },
-                                        modifier = Modifier
-                                            .padding(horizontal = 6.dp, vertical = 2.dp)
-                                            .clip(RoundedCornerShape(10.dp))
-                                            .background(if (isSelected) accent.copy(alpha = 0.12f) else Color.Transparent)
-                                    )
-                                }
+                            listOf(
+                                Pair("A to Z", SongSortOrder.A_TO_Z),
+                                Pair("Z to A", SongSortOrder.Z_TO_A),
+                                Pair("Duration", SongSortOrder.DURATION),
+                                Pair("File Size", SongSortOrder.FILE_SIZE),
+                                Pair("Newest First", SongSortOrder.NEWEST)
+                            ).forEach { (label, order) ->
+                                GlassDropdownMenuItem(
+                                    text = label,
+                                    isSelected = manager.artistInnerSortOrder == order,
+                                    manager = manager,
+                                    onClick = {
+                                        manager.setPersistentArtistInnerSort(order)
+                                        showSortMenu = false
+                                    }
+                                )
                             }
                         }
                     }
