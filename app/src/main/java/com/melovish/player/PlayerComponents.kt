@@ -35,6 +35,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -64,7 +65,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Slider
@@ -116,6 +120,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
@@ -131,6 +136,81 @@ import java.io.File
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.roundToInt
+
+// =========================================================================
+// 📌 REUSABLE FROSTED GLASS DROPDOWN MENU (With Anti-Clash Optical Diffusion)
+// =========================================================================
+
+@Composable
+fun GlassmorphicDropdownMenu(
+    expanded: Boolean,
+    onDismissRequest: () -> Unit,
+    manager: MusicManager,
+    modifier: Modifier = Modifier,
+    offset: DpOffset = DpOffset(0.dp, 8.dp),
+    content: @Composable ColumnScope.() -> Unit
+) {
+    val isDark = manager.isDarkMode
+    val glassBorderBrush = manager.getGlassBorderBrush()
+    val dialogColor = manager.getCurrentDialogColor()
+
+    // Optical diffusion underlay prevents background text/items from showing through
+    val baseScrimAlpha = (0.80f + (manager.frostedGlassOpacity * 0.18f)).coerceIn(0.72f, 0.98f)
+    val diffusionUnderlay = if (isDark) Color(0xFF0F172A).copy(alpha = baseScrimAlpha) else Color(0xFFF8FAFC).copy(alpha = baseScrimAlpha)
+
+    MaterialTheme(
+        colorScheme = MaterialTheme.colorScheme.copy(
+            surface = Color.Transparent
+        )
+    ) {
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = onDismissRequest,
+            offset = offset,
+            modifier = modifier
+                .shadow(
+                    elevation = 18.dp,
+                    shape = RoundedCornerShape(18.dp),
+                    spotColor = if (isDark) Color.Black.copy(alpha = 0.85f) else Color(0x55000000),
+                    ambientColor = if (isDark) Color.Black else Color(0x33000000)
+                )
+                .clip(RoundedCornerShape(18.dp))
+                .background(diffusionUnderlay)
+                .background(dialogColor)
+                .border(1.3.dp, glassBorderBrush, RoundedCornerShape(18.dp))
+                .padding(vertical = 4.dp),
+            content = content
+        )
+    }
+}
+
+@Composable
+fun GlassDropdownMenuItem(
+    text: String,
+    isSelected: Boolean,
+    manager: MusicManager,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val textColor = manager.getCurrentTextColor()
+    val accent = manager.accentColor
+
+    DropdownMenuItem(
+        text = {
+            Text(
+                text = text,
+                color = if (isSelected) accent else textColor,
+                fontSize = 14.sp,
+                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+            )
+        },
+        onClick = onClick,
+        modifier = modifier
+            .padding(horizontal = 6.dp, vertical = 2.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(if (isSelected) accent.copy(alpha = 0.12f) else Color.Transparent)
+    )
+}
 
 // Live Animated 4-Bar Equalizer
 @Composable

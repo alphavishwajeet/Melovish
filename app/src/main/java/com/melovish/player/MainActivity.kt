@@ -144,6 +144,7 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -1559,14 +1560,32 @@ fun HomeScreen(
                             ) {
                                 SortListVector(tint = accent, modifier = Modifier.size(18.dp))
                             }
-                            DropdownMenu(expanded = showSortMenu, onDismissRequest = { showSortMenu = false }) {
-                                DropdownMenuItem(text = { Text("A to Z") }, onClick = { manager.setPersistentSongSort(SongSortOrder.A_TO_Z); showSortMenu = false })
-                                DropdownMenuItem(text = { Text("Z to A") }, onClick = { manager.setPersistentSongSort(SongSortOrder.Z_TO_A); showSortMenu = false })
-                                DropdownMenuItem(text = { Text("Newest First") }, onClick = { manager.setPersistentSongSort(SongSortOrder.NEWEST); showSortMenu = false })
-                                DropdownMenuItem(text = { Text("Oldest First") }, onClick = { manager.setPersistentSongSort(SongSortOrder.OLDEST); showSortMenu = false })
-                                DropdownMenuItem(text = { Text("By Artist") }, onClick = { manager.setPersistentSongSort(SongSortOrder.ARTIST); showSortMenu = false })
-                                DropdownMenuItem(text = { Text("By File Size") }, onClick = { manager.setPersistentSongSort(SongSortOrder.FILE_SIZE); showSortMenu = false })
-                                DropdownMenuItem(text = { Text("By Duration") }, onClick = { manager.setPersistentSongSort(SongSortOrder.DURATION); showSortMenu = false })
+
+                            // ⚡ Frosted Glassmorphic Dropdown Menu
+                            GlassmorphicDropdownMenu(
+                                expanded = showSortMenu,
+                                onDismissRequest = { showSortMenu = false },
+                                manager = manager
+                            ) {
+                                listOf(
+                                    Pair("A to Z", SongSortOrder.A_TO_Z),
+                                    Pair("Z to A", SongSortOrder.Z_TO_A),
+                                    Pair("Newest First", SongSortOrder.NEWEST),
+                                    Pair("Oldest First", SongSortOrder.OLDEST),
+                                    Pair("By Artist", SongSortOrder.ARTIST),
+                                    Pair("By File Size", SongSortOrder.FILE_SIZE),
+                                    Pair("By Duration", SongSortOrder.DURATION)
+                                ).forEach { (label, order) ->
+                                    GlassDropdownMenuItem(
+                                        text = label,
+                                        isSelected = manager.currentSortOrder == order,
+                                        manager = manager,
+                                        onClick = {
+                                            manager.setPersistentSongSort(order)
+                                            showSortMenu = false
+                                        }
+                                    )
+                                }
                             }
                         }
 
@@ -1869,14 +1888,31 @@ fun LibraryScreen(
                             SortListVector(tint = accent, modifier = Modifier.size(18.dp))
                         }
 
-                        DropdownMenu(expanded = showFolderSortMenu, onDismissRequest = { showFolderSortMenu = false }) {
-                            DropdownMenuItem(text = { Text("A to Z") }, onClick = { manager.setPersistentFolderSort(FolderSortOrder.A_TO_Z); showFolderSortMenu = false })
-                            DropdownMenuItem(text = { Text("Z to A") }, onClick = { manager.setPersistentFolderSort(FolderSortOrder.Z_TO_A); showFolderSortMenu = false })
-                            DropdownMenuItem(text = { Text("Latest Added") }, onClick = { manager.setPersistentFolderSort(FolderSortOrder.LATEST); showFolderSortMenu = false })
-                            DropdownMenuItem(text = { Text("Oldest Added") }, onClick = { manager.setPersistentFolderSort(FolderSortOrder.OLDEST); showFolderSortMenu = false })
-                            DropdownMenuItem(text = { Text("Most Played") }, onClick = { manager.setPersistentFolderSort(FolderSortOrder.MOST_PLAYED); showFolderSortMenu = false })
-                            DropdownMenuItem(text = { Text("Largest Size") }, onClick = { manager.setPersistentFolderSort(FolderSortOrder.LARGEST_SIZE); showFolderSortMenu = false })
-                            DropdownMenuItem(text = { Text("Most Songs") }, onClick = { manager.setPersistentFolderSort(FolderSortOrder.MOST_SONGS); showFolderSortMenu = false })
+                        // ⚡ Frosted Glassmorphic Dropdown Menu
+                        GlassmorphicDropdownMenu(
+                            expanded = showFolderSortMenu,
+                            onDismissRequest = { showFolderSortMenu = false },
+                            manager = manager
+                        ) {
+                            listOf(
+                                Pair("A to Z", FolderSortOrder.A_TO_Z),
+                                Pair("Z to A", FolderSortOrder.Z_TO_A),
+                                Pair("Latest Added", FolderSortOrder.LATEST),
+                                Pair("Oldest Added", FolderSortOrder.OLDEST),
+                                Pair("Most Played", FolderSortOrder.MOST_PLAYED),
+                                Pair("Largest Size", FolderSortOrder.LARGEST_SIZE),
+                                Pair("Most Songs", FolderSortOrder.MOST_SONGS)
+                            ).forEach { (label, order) ->
+                                GlassDropdownMenuItem(
+                                    text = label,
+                                    isSelected = manager.currentFolderSortOrder == order,
+                                    manager = manager,
+                                    onClick = {
+                                        manager.setPersistentFolderSort(order)
+                                        showFolderSortMenu = false
+                                    }
+                                )
+                            }
                         }
                     }
                 }
@@ -2186,12 +2222,29 @@ fun PlaylistDetailScreen(
                             SortListVector(tint = accent, modifier = Modifier.size(18.dp))
                         }
 
-                        DropdownMenu(expanded = showSortMenu, onDismissRequest = { showSortMenu = false }) {
-                            DropdownMenuItem(text = { Text("A to Z") }, onClick = { manager.setPersistentPlaylistInnerSort(SongSortOrder.A_TO_Z); showSortMenu = false })
-                            DropdownMenuItem(text = { Text("Z to A") }, onClick = { manager.setPersistentPlaylistInnerSort(SongSortOrder.Z_TO_A); showSortMenu = false })
-                            DropdownMenuItem(text = { Text("Duration") }, onClick = { manager.setPersistentPlaylistInnerSort(SongSortOrder.DURATION); showSortMenu = false })
-                            DropdownMenuItem(text = { Text("File Size") }, onClick = { manager.setPersistentPlaylistInnerSort(SongSortOrder.FILE_SIZE); showSortMenu = false })
-                            DropdownMenuItem(text = { Text("Newest First") }, onClick = { manager.setPersistentPlaylistInnerSort(SongSortOrder.NEWEST); showSortMenu = false })
+                        // ⚡ Frosted Glassmorphic Dropdown Menu
+                        GlassmorphicDropdownMenu(
+                            expanded = showSortMenu,
+                            onDismissRequest = { showSortMenu = false },
+                            manager = manager
+                        ) {
+                            listOf(
+                                Pair("A to Z", SongSortOrder.A_TO_Z),
+                                Pair("Z to A", SongSortOrder.Z_TO_A),
+                                Pair("Duration", SongSortOrder.DURATION),
+                                Pair("File Size", SongSortOrder.FILE_SIZE),
+                                Pair("Newest First", SongSortOrder.NEWEST)
+                            ).forEach { (label, order) ->
+                                GlassDropdownMenuItem(
+                                    text = label,
+                                    isSelected = manager.playlistInnerSortOrder == order,
+                                    manager = manager,
+                                    onClick = {
+                                        manager.setPersistentPlaylistInnerSort(order)
+                                        showSortMenu = false
+                                    }
+                                )
+                            }
                         }
                     }
 
@@ -2412,12 +2465,29 @@ fun FolderSongsScreen(
                             SortListVector(tint = accent, modifier = Modifier.size(18.dp))
                         }
 
-                        DropdownMenu(expanded = showSortMenu, onDismissRequest = { showSortMenu = false }) {
-                            DropdownMenuItem(text = { Text("A to Z") }, onClick = { manager.setPersistentFolderInnerSort(SongSortOrder.A_TO_Z); showSortMenu = false })
-                            DropdownMenuItem(text = { Text("Z to A") }, onClick = { manager.setPersistentFolderInnerSort(SongSortOrder.Z_TO_A); showSortMenu = false })
-                            DropdownMenuItem(text = { Text("Duration") }, onClick = { manager.setPersistentFolderInnerSort(SongSortOrder.DURATION); showSortMenu = false })
-                            DropdownMenuItem(text = { Text("File Size") }, onClick = { manager.setPersistentFolderInnerSort(SongSortOrder.FILE_SIZE); showSortMenu = false })
-                            DropdownMenuItem(text = { Text("Newest First") }, onClick = { manager.setPersistentFolderInnerSort(SongSortOrder.NEWEST); showSortMenu = false })
+                        // ⚡ Frosted Glassmorphic Dropdown Menu
+                        GlassmorphicDropdownMenu(
+                            expanded = showSortMenu,
+                            onDismissRequest = { showSortMenu = false },
+                            manager = manager
+                        ) {
+                            listOf(
+                                Pair("A to Z", SongSortOrder.A_TO_Z),
+                                Pair("Z to A", SongSortOrder.Z_TO_A),
+                                Pair("Duration", SongSortOrder.DURATION),
+                                Pair("File Size", SongSortOrder.FILE_SIZE),
+                                Pair("Newest First", SongSortOrder.NEWEST)
+                            ).forEach { (label, order) ->
+                                GlassDropdownMenuItem(
+                                    text = label,
+                                    isSelected = manager.folderInnerSortOrder == order,
+                                    manager = manager,
+                                    onClick = {
+                                        manager.setPersistentFolderInnerSort(order)
+                                        showSortMenu = false
+                                    }
+                                )
+                            }
                         }
                     }
 
