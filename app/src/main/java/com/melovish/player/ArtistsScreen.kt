@@ -870,7 +870,7 @@ fun ArtistSquareCard(
 }
 
 // =========================================================================
-// 📌 ARTISTS SCREEN (Pre-Parsed Background Cache with 0ms Tab Switching)
+// 📌 ARTISTS SCREEN (Pre-Parsed Background Cache with 0ms Tab Switching & Scroll Retention)
 // =========================================================================
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -946,10 +946,17 @@ fun ArtistsScreen(
 
     var activeBubbleChar by remember { mutableStateOf<Char?>(null) }
 
+    // 🚀 SCROLL POSITION RETENTION FIX:
+    // Tracks the sort order across recompositions so we ONLY scroll to 0 when the user explicitly
+    // changes the sort order from the menu, and NEVER when returning back from an ArtistDetailScreen.
+    var previousSortOrder by remember { mutableStateOf(manager.artistsSortOrder) }
     LaunchedEffect(manager.artistsSortOrder) {
-        coroutineScope.launch {
-            try { listState.scrollToItem(0) } catch (_: Exception) {}
-            try { gridState.scrollToItem(0) } catch (_: Exception) {}
+        if (manager.artistsSortOrder != previousSortOrder) {
+            previousSortOrder = manager.artistsSortOrder
+            coroutineScope.launch {
+                try { listState.scrollToItem(0) } catch (_: Exception) {}
+                try { gridState.scrollToItem(0) } catch (_: Exception) {}
+            }
         }
     }
 

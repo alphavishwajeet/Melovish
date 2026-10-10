@@ -516,6 +516,7 @@ fun MelovishRootApp(manager: MusicManager) {
             isSettingsEqOpen || activeSongForMenu != null || activeTagEditSong != null || activeAddToPlaylistSong != null ||
             activeSongInfo != null
 
+    // 🚀 RESPONSIVE COLLAPSING/EXPANDING TOP BAR CONNECTION
     val topBarNestedScrollConnection = remember(isMainTabScreen, isAnyRootModalOpen) {
         object : NestedScrollConnection {
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
@@ -778,6 +779,7 @@ fun MelovishRootApp(manager: MusicManager) {
                 }
             }
 
+            // 🚀 MiniPlayer automatically hides when any dialog opens, placed below modals (zIndex 10f)
             if (manager.currentSong != null && !isPlayerExpanded && !isMiniPlayerDismissed && !isAnyRootModalOpen) {
                 Box(
                     modifier = Modifier
@@ -811,6 +813,7 @@ fun MelovishRootApp(manager: MusicManager) {
                 )
             }
 
+            // 🚀 Modal Scrim placed at zIndex(100f) strictly above the MiniPlayer
             AnimatedVisibility(
                 visible = isAnyRootModalOpen,
                 enter = fadeIn(tween(250)),
@@ -3323,7 +3326,7 @@ fun GridSizeDialog(
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
                 .background(dialogBg)
-                .border(1.5.dp, glassBorderBrush, RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
+                .border(1.5.dp, glassBorder, RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
                 .clickable(enabled = false) {}
                 .padding(22.dp)
         ) {
