@@ -1,12 +1,8 @@
 package com.melovish.player
 
-import android.app.Activity
 import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
-import android.os.Build
-import android.view.View
-import android.view.WindowManager
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -24,6 +20,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
@@ -83,7 +80,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -122,7 +118,6 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -144,7 +139,7 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 
 // =========================================================================
-// 📌 TRUE FROSTED GLASS DROPDOWN MENU (Thin Clean Shadow + Optical Diffusion)
+// 📌 FROSTED GLASS DROPDOWN MENU (Thin 3dp Window Shadow, No Inner Bleed)
 // =========================================================================
 
 @Composable
@@ -153,71 +148,25 @@ fun GlassmorphicDropdownMenu(
     onDismissRequest: () -> Unit,
     manager: MusicManager,
     modifier: Modifier = Modifier,
-    offset: DpOffset = DpOffset(0.dp, 8.dp),
+    offset: DpOffset = DpOffset(0.dp, 6.dp),
     content: @Composable ColumnScope.() -> Unit
 ) {
-    val isDark = manager.isDarkMode
     val glassBorderBrush = manager.getGlassBorderBrush()
-    val dialogSurfaceColor = manager.getCurrentDialogColor()
-    val menuCornerShape = RoundedCornerShape(16.dp)
-
-    // Controlled diffusion underlay ensures underlying text is completely blurred and unreadable
-    val sliderOpacity = manager.frostedGlassOpacity.coerceIn(0.15f, 0.95f)
-    val scrimAlpha = (0.76f + (sliderOpacity * 0.20f)).coerceIn(0.70f, 0.96f)
-
-    val frostedDiffusionGradient = remember(isDark, scrimAlpha) {
-        if (isDark) {
-            Brush.verticalGradient(
-                listOf(
-                    Color(0xFF1E293B).copy(alpha = scrimAlpha),
-                    Color(0xFF0F172A).copy(alpha = scrimAlpha.coerceAtMost(0.92f))
-                )
-            )
-        } else {
-            Brush.verticalGradient(
-                listOf(
-                    Color(0xFFFFFFFF).copy(alpha = scrimAlpha),
-                    Color(0xFFE2E8F0).copy(alpha = (scrimAlpha * 0.95f))
-                )
-            )
-        }
-    }
+    val dialogColor = manager.getCurrentDialogColor()
+    val menuCornerShape = RoundedCornerShape(20.dp)
 
     DropdownMenu(
         expanded = expanded,
         onDismissRequest = onDismissRequest,
         offset = offset,
         shape = menuCornerShape,
-        containerColor = Color.Transparent,
-        shadowElevation = 3.5.dp,
+        containerColor = dialogColor,
+        shadowElevation = 3.dp,
         tonalElevation = 0.dp,
-        border = null,
-        modifier = modifier
-            .border(1.2.dp, glassBorderBrush, menuCornerShape)
-            .background(frostedDiffusionGradient, menuCornerShape)
-            .background(dialogSurfaceColor, menuCornerShape)
-            .padding(vertical = 4.dp)
-    ) {
-        val popupView = LocalView.current
-        SideEffect {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                var current: View? = popupView
-                while (current != null) {
-                    val lp = current.layoutParams as? WindowManager.LayoutParams
-                    if (lp != null) {
-                        lp.flags = lp.flags or WindowManager.LayoutParams.FLAG_BLUR_BEHIND
-                        lp.blurBehindRadius = (16 * popupView.resources.displayMetrics.density).roundToInt()
-                        current.rootView?.let { root ->
-                            (root.context as? Activity)?.windowManager?.updateViewLayout(root, lp)
-                        }
-                        break
-                    }
-                    current = current.parent as? View
-                }
-            }
-        }
-        content()
-    }
+        border = BorderStroke(1.2.dp, glassBorderBrush),
+        modifier = modifier.padding(vertical = 4.dp),
+        content = content
+    )
 }
 
 @Composable
@@ -230,7 +179,7 @@ fun GlassDropdownMenuItem(
 ) {
     val textColor = manager.getCurrentTextColor()
     val accent = manager.accentColor
-    val itemShape = RoundedCornerShape(10.dp)
+    val itemShape = RoundedCornerShape(12.dp)
 
     DropdownMenuItem(
         text = {
@@ -496,7 +445,7 @@ fun DefaultProfileAvatar(
             val bodyPath = Path().apply {
                 moveTo(w * 0.16f, h * 0.88f)
                 cubicTo(w * 0.16f, h * 0.66f, w * 0.28f, h * 0.49f, w * 0.50f, h * 0.49f)
-                cubicTo(w * 0.72f, h * 0.84f, w * 0.84f, h * 0.66f, w * 0.84f, h * 0.88f)
+                cubicTo(w * 0.72f, h * 0.49f, w * 0.84f, h * 0.66f, w * 0.84f, h * 0.88f)
                 cubicTo(w * 0.76f, h * 0.95f, w * 0.24f, h * 0.95f, w * 0.16f, h * 0.88f)
                 close()
             }
