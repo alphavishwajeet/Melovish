@@ -138,7 +138,7 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 
 // =========================================================================
-// 📌 SEAMLESS FROSTED GLASS DROPDOWN MENU (Exact Dialog Atmosphere Match)
+// 📌 SEAMLESS FROSTED GLASS DROPDOWN MENU (Slider Controlled, Single Corner)
 // =========================================================================
 
 @Composable
@@ -155,12 +155,12 @@ fun GlassmorphicDropdownMenu(
     val dialogColor = manager.getCurrentDialogColor()
     val menuCornerShape = RoundedCornerShape(18.dp)
 
-    // Density-adjusted underlay completely obscures text underneath while respecting opacity slider
-    val baseAlpha = (0.90f + (manager.frostedGlassOpacity * 0.08f)).coerceIn(0.88f, 0.99f)
+    // Diffusion scrim synced directly with the slider setting
+    val baseScrimAlpha = (0.75f + (manager.frostedGlassOpacity * 0.22f)).coerceIn(0.68f, 0.98f)
     val diffusionUnderlay = if (isDark) {
-        Color(0xFF131B2E).copy(alpha = baseAlpha)
+        Color(0xFF0F172A).copy(alpha = baseScrimAlpha)
     } else {
-        Color(0xFFF1F5F9).copy(alpha = baseAlpha)
+        Color(0xFFF8FAFC).copy(alpha = baseScrimAlpha)
     }
 
     DropdownMenu(
@@ -174,16 +174,16 @@ fun GlassmorphicDropdownMenu(
         border = null,
         modifier = modifier
             .shadow(
-                elevation = 14.dp,
+                elevation = 20.dp,
                 shape = menuCornerShape,
-                spotColor = if (isDark) Color.Black.copy(alpha = 0.70f) else Color(0x33000000),
-                ambientColor = if (isDark) Color.Black.copy(alpha = 0.50f) else Color(0x1A000000)
+                spotColor = if (isDark) Color.Black.copy(alpha = 0.90f) else Color(0x66000000),
+                ambientColor = if (isDark) Color.Black else Color(0x33000000)
             )
             .clip(menuCornerShape)
             .background(diffusionUnderlay)
             .background(dialogColor)
             .border(1.2.dp, glassBorderBrush, menuCornerShape)
-            .padding(vertical = 6.dp),
+            .padding(vertical = 4.dp),
         content = content
     )
 }
@@ -198,7 +198,7 @@ fun GlassDropdownMenuItem(
 ) {
     val textColor = manager.getCurrentTextColor()
     val accent = manager.accentColor
-    val itemShape = RoundedCornerShape(10.dp)
+    val itemShape = RoundedCornerShape(12.dp)
 
     DropdownMenuItem(
         text = {
@@ -216,9 +216,9 @@ fun GlassDropdownMenuItem(
             trailingIconColor = textColor
         ),
         modifier = modifier
-            .padding(horizontal = 8.dp, vertical = 2.dp)
+            .padding(horizontal = 6.dp, vertical = 2.dp)
             .clip(itemShape)
-            .background(if (isSelected) accent.copy(alpha = 0.16f) else Color.Transparent)
+            .background(if (isSelected) accent.copy(alpha = 0.15f) else Color.Transparent)
     )
 }
 
