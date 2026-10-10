@@ -68,7 +68,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MenuDefaults
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Slider
@@ -138,7 +138,7 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 
 // =========================================================================
-// 📌 REUSABLE FROSTED GLASS DROPDOWN MENU (With Anti-Clash Optical Diffusion)
+// 📌 SEAMLESS FROSTED GLASS DROPDOWN MENU (Slider Controlled, Single Corner)
 // =========================================================================
 
 @Composable
@@ -153,35 +153,39 @@ fun GlassmorphicDropdownMenu(
     val isDark = manager.isDarkMode
     val glassBorderBrush = manager.getGlassBorderBrush()
     val dialogColor = manager.getCurrentDialogColor()
+    val menuCornerShape = RoundedCornerShape(18.dp)
 
-    // Optical diffusion underlay prevents background text/items from showing through
-    val baseScrimAlpha = (0.80f + (manager.frostedGlassOpacity * 0.18f)).coerceIn(0.72f, 0.98f)
-    val diffusionUnderlay = if (isDark) Color(0xFF0F172A).copy(alpha = baseScrimAlpha) else Color(0xFFF8FAFC).copy(alpha = baseScrimAlpha)
-
-    MaterialTheme(
-        colorScheme = MaterialTheme.colorScheme.copy(
-            surface = Color.Transparent
-        )
-    ) {
-        DropdownMenu(
-            expanded = expanded,
-            onDismissRequest = onDismissRequest,
-            offset = offset,
-            modifier = modifier
-                .shadow(
-                    elevation = 18.dp,
-                    shape = RoundedCornerShape(18.dp),
-                    spotColor = if (isDark) Color.Black.copy(alpha = 0.85f) else Color(0x55000000),
-                    ambientColor = if (isDark) Color.Black else Color(0x33000000)
-                )
-                .clip(RoundedCornerShape(18.dp))
-                .background(diffusionUnderlay)
-                .background(dialogColor)
-                .border(1.3.dp, glassBorderBrush, RoundedCornerShape(18.dp))
-                .padding(vertical = 4.dp),
-            content = content
-        )
+    // Diffusion scrim synced directly with the slider setting
+    val baseScrimAlpha = (0.75f + (manager.frostedGlassOpacity * 0.22f)).coerceIn(0.68f, 0.98f)
+    val diffusionUnderlay = if (isDark) {
+        Color(0xFF0F172A).copy(alpha = baseScrimAlpha)
+    } else {
+        Color(0xFFF8FAFC).copy(alpha = baseScrimAlpha)
     }
+
+    DropdownMenu(
+        expanded = expanded,
+        onDismissRequest = onDismissRequest,
+        offset = offset,
+        shape = menuCornerShape,
+        containerColor = Color.Transparent,
+        shadowElevation = 0.dp,
+        tonalElevation = 0.dp,
+        border = null,
+        modifier = modifier
+            .shadow(
+                elevation = 20.dp,
+                shape = menuCornerShape,
+                spotColor = if (isDark) Color.Black.copy(alpha = 0.90f) else Color(0x66000000),
+                ambientColor = if (isDark) Color.Black else Color(0x33000000)
+            )
+            .clip(menuCornerShape)
+            .background(diffusionUnderlay)
+            .background(dialogColor)
+            .border(1.2.dp, glassBorderBrush, menuCornerShape)
+            .padding(vertical = 4.dp),
+        content = content
+    )
 }
 
 @Composable
@@ -194,6 +198,7 @@ fun GlassDropdownMenuItem(
 ) {
     val textColor = manager.getCurrentTextColor()
     val accent = manager.accentColor
+    val itemShape = RoundedCornerShape(12.dp)
 
     DropdownMenuItem(
         text = {
@@ -205,10 +210,15 @@ fun GlassDropdownMenuItem(
             )
         },
         onClick = onClick,
+        colors = MenuDefaults.itemColors(
+            textColor = textColor,
+            leadingIconColor = textColor,
+            trailingIconColor = textColor
+        ),
         modifier = modifier
             .padding(horizontal = 6.dp, vertical = 2.dp)
-            .clip(RoundedCornerShape(10.dp))
-            .background(if (isSelected) accent.copy(alpha = 0.12f) else Color.Transparent)
+            .clip(itemShape)
+            .background(if (isSelected) accent.copy(alpha = 0.15f) else Color.Transparent)
     )
 }
 
