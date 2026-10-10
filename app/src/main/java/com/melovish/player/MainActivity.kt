@@ -2574,7 +2574,7 @@ fun ManagePlaylistsDialog(
     }
 
     val dialogSurface = manager.getCurrentDialogColor()
-    val glassBorder = manager.getGlassBorderBrush()
+    val glassBorderBrush = manager.getGlassBorderBrush()
 
     LaunchedEffect(draggingPlaylistId) {
         if (draggingPlaylistId != null) {
@@ -2662,7 +2662,7 @@ fun ManagePlaylistsDialog(
                 .navigationBarsPadding()
                 .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
                 .background(dialogSurface)
-                .border(1.5.dp, glassBorder, RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
+                .border(1.5.dp, glassBorderBrush, RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
                 .clickable(enabled = false) {}
                 .padding(22.dp)
         ) {
@@ -2785,8 +2785,8 @@ fun ManagePlaylistsDialog(
                                                                 val toIndex = hitItem.index.coerceIn(0, tempList.size - 1)
                                                                 if (fromIndex != -1 && fromIndex != toIndex) {
                                                                     manager.triggerHapticFeedback(false)
-                                                                    val movedItem = tempList.removeAt(fromIndex)
-                                                                    tempList.add(toIndex, movedItem)
+                                                                    val moved = tempList.removeAt(fromIndex)
+                                                                    tempList.add(toIndex, moved)
                                                                 }
                                                             }
                                                         }
@@ -2916,7 +2916,7 @@ fun CreatePlaylistDialog(manager: MusicManager, onDismiss: () -> Unit) {
     }
 
     val dialogSurface = manager.getCurrentDialogColor()
-    val glassBorder = manager.getGlassBorderBrush()
+    val glassBorderBrush = manager.getGlassBorderBrush()
 
     Box(
         modifier = Modifier
@@ -2935,7 +2935,7 @@ fun CreatePlaylistDialog(manager: MusicManager, onDismiss: () -> Unit) {
                 .padding(bottom = bottomInsetPadding)
                 .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
                 .background(dialogSurface)
-                .border(1.5.dp, glassBorder, RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
+                .border(1.5.dp, glassBorderBrush, RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
                 .clickable(enabled = false) {}
                 .padding(24.dp)
         ) {
@@ -3326,7 +3326,7 @@ fun GridSizeDialog(
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
                 .background(dialogBg)
-                .border(1.5.dp, glassBorder, RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
+                .border(1.5.dp, glassBorderBrush, RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
                 .clickable(enabled = false) {}
                 .padding(22.dp)
         ) {
@@ -3419,7 +3419,7 @@ fun FolderColorDialog(
     }
 
     val dialogBg = manager.getCurrentDialogColor()
-    val glassBorder = manager.getGlassBorderBrush()
+    val glassBorderBrush = manager.getGlassBorderBrush()
 
     Box(
         modifier = Modifier
@@ -3437,7 +3437,7 @@ fun FolderColorDialog(
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
                 .background(dialogBg)
-                .border(1.5.dp, glassBorder, RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
+                .border(1.5.dp, glassBorderBrush, RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
                 .clickable(enabled = false) {}
                 .padding(22.dp)
         ) {
@@ -3535,7 +3535,7 @@ fun FavouritePlaylistLongPressDialog(
 ) {
     val textColor = manager.getCurrentTextColor()
     val dialogBg = manager.getCurrentDialogColor()
-    val glassBorder = manager.getGlassBorderBrush()
+    val glassBorderBrush = manager.getGlassBorderBrush()
 
     val preset9Colors = remember {
         listOf(
@@ -3560,7 +3560,7 @@ fun FavouritePlaylistLongPressDialog(
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
                 .background(dialogBg)
-                .border(1.5.dp, glassBorder, RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
+                .border(1.5.dp, glassBorderBrush, RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
                 .clickable(enabled = false) {}
                 .padding(22.dp)
         ) {
@@ -3672,7 +3672,7 @@ fun FolderColourPickerDialog(
     val isDark = manager.isDarkMode
     val textColor = manager.getCurrentTextColor()
     val dialogBg = manager.getCurrentDialogColor()
-    val glassBorder = manager.getGlassBorderBrush()
+    val glassBorderBrush = manager.getGlassBorderBrush()
 
     Box(
         modifier = Modifier
@@ -3690,7 +3690,7 @@ fun FolderColourPickerDialog(
                 .fillMaxWidth(0.92f)
                 .clip(RoundedCornerShape(28.dp))
                 .background(dialogBg)
-                .border(1.5.dp, glassBorder, RoundedCornerShape(28.dp))
+                .border(1.5.dp, glassBorderBrush, RoundedCornerShape(28.dp))
                 .clickable(enabled = false) {}
                 .padding(20.dp)
         ) {
@@ -4117,7 +4117,7 @@ fun PlaylistAddSearchDialog(playlist: Playlist, manager: MusicManager, onDismiss
     val folders: ImmutableList<String> = remember(manager.allSongs.size) { manager.allSongs.map { it.folderName }.distinct().toImmutableList() }
 
     val dialogSurface = manager.getCurrentDialogColor()
-    val glassBorder = manager.getGlassBorderBrush()
+    val glassBorderBrush = manager.getGlassBorderBrush()
 
     Box(
         modifier = Modifier
@@ -4136,7 +4136,7 @@ fun PlaylistAddSearchDialog(playlist: Playlist, manager: MusicManager, onDismiss
                 .height(600.dp)
                 .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
                 .background(dialogSurface)
-                .border(1.5.dp, glassBorder, RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
+                .border(1.5.dp, glassBorderBrush, RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
                 .padding(20.dp)
         ) {
             Column {
@@ -4379,7 +4379,7 @@ fun SongItemActionModal(
 ) {
     val textColor = manager.getCurrentTextColor()
     val dialogSurface = manager.getCurrentDialogColor()
-    val glassBorder = manager.getGlassBorderBrush()
+    val glassBorderBrush = manager.getGlassBorderBrush()
 
     Box(
         modifier = Modifier
@@ -4397,7 +4397,7 @@ fun SongItemActionModal(
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
                 .background(dialogSurface)
-                .border(1.5.dp, glassBorder, RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
+                .border(1.5.dp, glassBorderBrush, RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
                 .clickable(enabled = false) {}
                 .padding(22.dp)
         ) {
@@ -4452,7 +4452,7 @@ fun ModalActionRow(icon: String, title: String, color: Color, onClick: () -> Uni
 fun SongInfoDialog(manager: MusicManager, song: Song, isDark: Boolean, onDismiss: () -> Unit) {
     val textColor = manager.getCurrentTextColor()
     val dialogSurface = manager.getCurrentDialogColor()
-    val glassBorder = manager.getGlassBorderBrush()
+    val glassBorderBrush = manager.getGlassBorderBrush()
 
     Box(
         modifier = Modifier
@@ -4470,7 +4470,7 @@ fun SongInfoDialog(manager: MusicManager, song: Song, isDark: Boolean, onDismiss
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
                 .background(dialogSurface)
-                .border(1.5.dp, glassBorder, RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
+                .border(1.5.dp, glassBorderBrush, RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
                 .clickable(enabled = false) {}
                 .padding(22.dp)
         ) {
