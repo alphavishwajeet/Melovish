@@ -1,8 +1,12 @@
 package com.melovish.player
 
+import android.app.Activity
 import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
+import android.os.Build
+import android.view.View
+import android.view.WindowManager
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -79,6 +83,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -117,6 +122,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -125,6 +131,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.DialogWindowProvider
 import androidx.compose.ui.zIndex
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
@@ -138,7 +145,7 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 
 // =========================================================================
-// 📌 TRUE FROSTED GLASS DROPDOWN MENU (Dialog Glass Styling + Outer Drop Shadow)
+// 📌 TRUE FROSTED GLASS DROPDOWN MENU (Hardware Blur + Optical Diffusion)
 // =========================================================================
 
 @Composable
@@ -155,12 +162,26 @@ fun GlassmorphicDropdownMenu(
     val dialogSurfaceColor = manager.getCurrentDialogColor()
     val menuCornerShape = RoundedCornerShape(20.dp)
 
-    // Base optical diffusion layer to dissolve underlying list text and lines
-    val baseScrimAlpha = (0.78f + (manager.frostedGlassOpacity * 0.20f)).coerceIn(0.72f, 0.98f)
-    val diffusionUnderlay = if (isDark) {
-        Color(0xFF0F172A).copy(alpha = baseScrimAlpha)
-    } else {
-        Color(0xFFE2E8F0).copy(alpha = baseScrimAlpha)
+    // Calculate optical diffusion density from slider (prevents text from being readable while keeping glass look)
+    val sliderOpacity = manager.frostedGlassOpacity.coerceIn(0.15f, 0.95f)
+    val scrimAlpha = (0.78f + (sliderOpacity * 0.18f)).coerceIn(0.70f, 0.96f)
+
+    val frostedDiffusionGradient = remember(isDark, scrimAlpha) {
+        if (isDark) {
+            Brush.verticalGradient(
+                listOf(
+                    Color(0xFF1E293B).copy(alpha = scrimAlpha),
+                    Color(0xFF0F172A).copy(alpha = scrimAlpha.coerceAtMost(0.92f))
+                )
+            )
+        } else {
+            Brush.verticalGradient(
+                listOf(
+                    Color(0xFFFFFFFF).copy(alpha = scrimAlpha),
+                    Color(0xFFE2E8F0).copy(alpha = (scrimAlpha * 0.95f))
+                )
+            )
+        }
     }
 
     DropdownMenu(
@@ -169,16 +190,35 @@ fun GlassmorphicDropdownMenu(
         offset = offset,
         shape = menuCornerShape,
         containerColor = Color.Transparent,
-        shadowElevation = 18.dp,
+        shadowElevation = 20.dp,
         tonalElevation = 8.dp,
         border = null,
         modifier = modifier
             .border(1.4.dp, glassBorderBrush, menuCornerShape)
-            .background(diffusionUnderlay, menuCornerShape)
+            .background(frostedDiffusionGradient, menuCornerShape)
             .background(dialogSurfaceColor, menuCornerShape)
-            .padding(vertical = 6.dp),
-        content = content
-    )
+            .padding(vertical = 6.dp)
+    ) {
+        val popupView = LocalView.current
+        SideEffect {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                var current: View? = popupView
+                while (current != null) {
+                    val lp = current.layoutParams as? WindowManager.LayoutParams
+                    if (lp != null) {
+                        lp.flags = lp.flags or WindowManager.LayoutParams.FLAG_BLUR_BEHIND
+                        lp.blurBehindRadius = (16 * popupView.resources.displayMetrics.density).roundToInt()
+                        current.rootView?.let { root ->
+                            (root.context as? Activity)?.windowManager?.updateViewLayout(root, lp)
+                        }
+                        break
+                    }
+                    current = current.parent as? View
+                }
+            }
+        }
+        content()
+    }
 }
 
 @Composable
