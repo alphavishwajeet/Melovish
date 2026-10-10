@@ -138,7 +138,7 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 
 // =========================================================================
-// 📌 SEAMLESS FROSTED GLASS DROPDOWN MENU (Slider Controlled, Single Corner)
+// 📌 TRUE FROSTED GLASS DROPDOWN MENU (Dialog Glass Styling + Outer Drop Shadow)
 // =========================================================================
 
 @Composable
@@ -152,15 +152,15 @@ fun GlassmorphicDropdownMenu(
 ) {
     val isDark = manager.isDarkMode
     val glassBorderBrush = manager.getGlassBorderBrush()
-    val dialogColor = manager.getCurrentDialogColor()
-    val menuCornerShape = RoundedCornerShape(18.dp)
+    val dialogSurfaceColor = manager.getCurrentDialogColor()
+    val menuCornerShape = RoundedCornerShape(20.dp)
 
-    // Diffusion scrim synced directly with the slider setting
-    val baseScrimAlpha = (0.75f + (manager.frostedGlassOpacity * 0.22f)).coerceIn(0.68f, 0.98f)
+    // Base optical diffusion layer to dissolve underlying list text and lines
+    val baseScrimAlpha = (0.78f + (manager.frostedGlassOpacity * 0.20f)).coerceIn(0.72f, 0.98f)
     val diffusionUnderlay = if (isDark) {
         Color(0xFF0F172A).copy(alpha = baseScrimAlpha)
     } else {
-        Color(0xFFF8FAFC).copy(alpha = baseScrimAlpha)
+        Color(0xFFE2E8F0).copy(alpha = baseScrimAlpha)
     }
 
     DropdownMenu(
@@ -169,21 +169,14 @@ fun GlassmorphicDropdownMenu(
         offset = offset,
         shape = menuCornerShape,
         containerColor = Color.Transparent,
-        shadowElevation = 0.dp,
-        tonalElevation = 0.dp,
+        shadowElevation = 18.dp,
+        tonalElevation = 8.dp,
         border = null,
         modifier = modifier
-            .shadow(
-                elevation = 20.dp,
-                shape = menuCornerShape,
-                spotColor = if (isDark) Color.Black.copy(alpha = 0.90f) else Color(0x66000000),
-                ambientColor = if (isDark) Color.Black else Color(0x33000000)
-            )
-            .clip(menuCornerShape)
-            .background(diffusionUnderlay)
-            .background(dialogColor)
-            .border(1.2.dp, glassBorderBrush, menuCornerShape)
-            .padding(vertical = 4.dp),
+            .border(1.4.dp, glassBorderBrush, menuCornerShape)
+            .background(diffusionUnderlay, menuCornerShape)
+            .background(dialogSurfaceColor, menuCornerShape)
+            .padding(vertical = 6.dp),
         content = content
     )
 }
@@ -206,7 +199,7 @@ fun GlassDropdownMenuItem(
                 text = text,
                 color = if (isSelected) accent else textColor,
                 fontSize = 14.sp,
-                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Medium
             )
         },
         onClick = onClick,
@@ -216,9 +209,9 @@ fun GlassDropdownMenuItem(
             trailingIconColor = textColor
         ),
         modifier = modifier
-            .padding(horizontal = 6.dp, vertical = 2.dp)
+            .padding(horizontal = 8.dp, vertical = 2.dp)
             .clip(itemShape)
-            .background(if (isSelected) accent.copy(alpha = 0.15f) else Color.Transparent)
+            .background(if (isSelected) accent.copy(alpha = 0.16f) else Color.Transparent)
     )
 }
 
