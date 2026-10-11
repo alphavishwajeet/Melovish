@@ -42,7 +42,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -120,7 +122,10 @@ import java.io.File
 import java.io.FileOutputStream
 import java.util.Locale
 
-// Thread-Safe Artist Customization & Persistence Engine
+// =========================================================================
+// 📌 THREAD-SAFE ARTIST CUSTOMIZATION & PERSISTENCE ENGINE
+// =========================================================================
+
 object ArtistDataManager {
     private const val PREFS_NAME = "melovish_artists_prefs_v12"
     private var prefs: SharedPreferences? = null
@@ -337,7 +342,10 @@ object ArtistDataManager {
     }
 }
 
-// Regex-Optimized Canonical Artist Parsing Engine
+// =========================================================================
+// 📌 REGEX-OPTIMIZED CANONICAL ARTIST PARSING ENGINE
+// =========================================================================
+
 object ArtistParsingEngine {
     private val splitRegex = Regex("""\s*(?:,|/|&|\bfeat\.|\bft\.|\bfeaturing\b)\s*""", RegexOption.IGNORE_CASE)
     private val promoWebsitesRegex = Regex(
@@ -483,7 +491,10 @@ object ArtistParsingEngine {
     }
 }
 
-// Root Artist Action Modal
+// =========================================================================
+// 📌 ROOT ARTIST ACTION MODAL
+// =========================================================================
+
 @UnstableApi
 @Composable
 fun RootArtistActionModal(
@@ -540,7 +551,8 @@ fun RootArtistActionModal(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(550.dp)
+                    .fillMaxHeight(0.85f)
+                    .imePadding()
                     .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
                     .background(dialogSurface)
                     .border(1.5.dp, glassBorderBrush, RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
@@ -729,7 +741,10 @@ fun RootArtistActionModal(
     }
 }
 
-// 1:1 Dynamic Square Artist Card with Fast Hardware Image Loading & Instant Mic-on-Accent Fallback
+// =========================================================================
+// 📌 1:1 DYNAMIC SQUARE ARTIST CARD
+// =========================================================================
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ArtistSquareCard(
@@ -885,7 +900,7 @@ fun ArtistSquareCard(
 }
 
 // =========================================================================
-// 📌 ARTISTS SCREEN (Pre-Parsed Background Cache with 0ms Tab Switching & Scroll Retention)
+// 📌 ARTISTS SCREEN (Pre-Parsed Background Cache with 0ms Tab Switching)
 // =========================================================================
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -960,7 +975,6 @@ fun ArtistsScreen(
 
     var activeBubbleChar by remember { mutableStateOf<Char?>(null) }
 
-    // 🚀 SCROLL POSITION RETENTION FIX:
     var previousSortOrder by remember { mutableStateOf(manager.artistsSortOrder) }
     LaunchedEffect(manager.artistsSortOrder) {
         if (manager.artistsSortOrder != previousSortOrder) {
@@ -1034,13 +1048,12 @@ fun ArtistsScreen(
                                 .clip(CircleShape)
                                 .background(cardBg)
                                 .border(1.2.dp, glassBorderBrush, CircleShape)
-                                .clickable { showSortMenu = true },
+                            .clickable { showSortMenu = true },
                             contentAlignment = Alignment.Center
                         ) {
                             SortListVector(tint = accentColor, modifier = Modifier.size(19.dp))
                         }
 
-                        // ⚡ Reusable Frosted Glassmorphic Dropdown Menu
                         GlassmorphicDropdownMenu(
                             expanded = showSortMenu,
                             onDismissRequest = { showSortMenu = false },
@@ -1331,7 +1344,6 @@ fun ArtistsScreen(
                         }
                     }
 
-                    // Alphabet Fast-Scroll Bar with O(1) jump
                     Column(
                         modifier = Modifier
                             .align(Alignment.CenterEnd)
@@ -1518,7 +1530,6 @@ fun ArtistDetailScreen(
                             SortListVector(tint = accent, modifier = Modifier.size(18.dp))
                         }
 
-                        // ⚡ Reusable Frosted Glassmorphic Dropdown Menu
                         GlassmorphicDropdownMenu(
                             expanded = showSortMenu,
                             onDismissRequest = { showSortMenu = false },
@@ -1690,7 +1701,7 @@ fun ArtistDetailScreen(
 }
 
 // =========================================================================
-// 📌 ARTIST ADD SONGS DIALOG
+// 📌 ARTIST ADD SONGS DIALOG (Hardware-Accelerated Fluid Keyboard Padding)
 // =========================================================================
 
 @Composable
@@ -1745,7 +1756,8 @@ fun ArtistAddSongsDialog(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(600.dp)
+                .fillMaxHeight(0.85f)
+                .imePadding()
                 .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
                 .background(dialogSurface)
                 .border(1.5.dp, glassBorderBrush, RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
@@ -1809,31 +1821,19 @@ fun ArtistAddSongsDialog(
     }
 }
 
+// =========================================================================
+// 📌 CREATE ARTIST DIALOG (Zero-Lag Hardware-Accelerated 120Hz Animation)
+// =========================================================================
+
 @Composable
 fun CreateArtistDialog(
     manager: MusicManager,
     onDismiss: () -> Unit
 ) {
-    val context = LocalContext.current
     val isDark = manager.isDarkMode
     val textColor = manager.getCurrentTextColor()
     val cardBg = manager.getCurrentSurfaceColor()
     val accentColor = manager.accentColor
-
-    val density = LocalDensity.current
-    val isImeVisible = WindowInsets.ime.getBottom(density) > 0
-    val bottomInsetPadding = if (isImeVisible) {
-        WindowInsets.ime.asPaddingValues().calculateBottomPadding()
-    } else {
-        WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-    }
-
-    val dialogScrollInterceptor = remember {
-        object : NestedScrollConnection {
-            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset = Offset.Zero
-            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset = available
-        }
-    }
 
     val dialogSurface = manager.getCurrentDialogColor()
     val glassBorderBrush = manager.getGlassBorderBrush()
@@ -1842,8 +1842,16 @@ fun CreateArtistDialog(
     var searchSongQuery by remember { mutableStateOf("") }
     val selectedSongs = remember { mutableStateListOf<Song>() }
 
-    val filteredSongs = manager.allSongs.filter {
-        it.title.contains(searchSongQuery, ignoreCase = true) || it.artist.contains(searchSongQuery, ignoreCase = true)
+    // ⚡ Memoized filtering to eliminate frame drops while the keyboard is animating
+    val filteredSongs = remember(searchSongQuery, manager.allSongs.size) {
+        val q = searchSongQuery.trim()
+        if (q.isEmpty()) {
+            manager.allSongs
+        } else {
+            manager.allSongs.filter {
+                it.title.contains(q, ignoreCase = true) || it.artist.contains(q, ignoreCase = true)
+            }
+        }
     }
 
     Box(
@@ -1851,7 +1859,6 @@ fun CreateArtistDialog(
             .fillMaxSize()
             .zIndex(999f)
             .background(Color(0x77000000))
-            .nestedScroll(dialogScrollInterceptor)
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
                 onDismiss()
             },
@@ -1860,8 +1867,8 @@ fun CreateArtistDialog(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = bottomInsetPadding)
-                .height(650.dp)
+                .fillMaxHeight(0.85f)
+                .imePadding() // ⚡ Native hardware-accelerated keyboard padding
                 .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
                 .background(dialogSurface)
                 .border(1.5.dp, glassBorderBrush, RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
@@ -1965,6 +1972,10 @@ fun CreateArtistDialog(
         }
     }
 }
+
+// =========================================================================
+// 📌 ARTIST FAVORITES INTEGRATION
+// =========================================================================
 
 fun addArtistToFavouritePlaylists(context: Context, manager: MusicManager, artist: ArtistItem) {
     val existingIndex = manager.customPlaylists.indexOfFirst { it.name.equals(artist.name, ignoreCase = true) }
