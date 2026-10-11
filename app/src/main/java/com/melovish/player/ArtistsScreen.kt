@@ -1048,7 +1048,7 @@ fun ArtistsScreen(
                                 .clip(CircleShape)
                                 .background(cardBg)
                                 .border(1.2.dp, glassBorderBrush, CircleShape)
-                            .clickable { showSortMenu = true },
+                                .clickable { showSortMenu = true },
                             contentAlignment = Alignment.Center
                         ) {
                             SortListVector(tint = accentColor, modifier = Modifier.size(19.dp))
@@ -1716,13 +1716,6 @@ fun ArtistAddSongsDialog(
     val cardBg = manager.getCurrentSurfaceColor()
     val accent = manager.accentColor
 
-    val modalScrollInterceptor = remember {
-        object : NestedScrollConnection {
-            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset = Offset.Zero
-            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset = available
-        }
-    }
-
     val currentArtist = remember(artistName, manager.parsedArtistsList, ArtistDataManager.refreshTrigger) {
         val updatedGroup = manager.parsedArtistsList
         updatedGroup.find { it.name.equals(artistName, ignoreCase = true) }
@@ -1733,9 +1726,10 @@ fun ArtistAddSongsDialog(
 
     var addSongSearch by remember { mutableStateOf("") }
     val candidates = remember(addSongSearch, currentSongIdSet, manager.allSongs.size) {
+        val q = addSongSearch.trim()
         manager.allSongs.filter {
             !currentSongIdSet.contains(it.id) &&
-            (it.title.contains(addSongSearch, ignoreCase = true) || it.artist.contains(addSongSearch, ignoreCase = true))
+            (q.isEmpty() || it.title.contains(q, ignoreCase = true) || it.artist.contains(q, ignoreCase = true))
         }
     }
 
@@ -1747,7 +1741,6 @@ fun ArtistAddSongsDialog(
             .fillMaxSize()
             .zIndex(999f)
             .background(Color(0x77000000))
-            .nestedScroll(modalScrollInterceptor)
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
                 onDismiss()
             },
@@ -1764,10 +1757,14 @@ fun ArtistAddSongsDialog(
                 .clickable(enabled = false) {}
                 .padding(20.dp)
         ) {
-            Column {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Text("Add Songs to $artistName", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = textColor)
-                    Button(onClick = { onDismiss() }, shape = RoundedCornerShape(8.dp)) { Text("Done") }
+                    Button(onClick = onDismiss, shape = RoundedCornerShape(8.dp)) { Text("Done") }
                 }
                 Spacer(modifier = Modifier.height(10.dp))
 
@@ -1830,6 +1827,7 @@ fun CreateArtistDialog(
     manager: MusicManager,
     onDismiss: () -> Unit
 ) {
+    val context = LocalContext.current
     val isDark = manager.isDarkMode
     val textColor = manager.getCurrentTextColor()
     val cardBg = manager.getCurrentSurfaceColor()
@@ -1842,7 +1840,6 @@ fun CreateArtistDialog(
     var searchSongQuery by remember { mutableStateOf("") }
     val selectedSongs = remember { mutableStateListOf<Song>() }
 
-    // ⚡ Memoized filtering to eliminate frame drops while the keyboard is animating
     val filteredSongs = remember(searchSongQuery, manager.allSongs.size) {
         val q = searchSongQuery.trim()
         if (q.isEmpty()) {
@@ -1868,7 +1865,7 @@ fun CreateArtistDialog(
             modifier = Modifier
                 .fillMaxWidth()
                 .fillMaxHeight(0.85f)
-                .imePadding() // ⚡ Native hardware-accelerated keyboard padding
+                .imePadding()
                 .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
                 .background(dialogSurface)
                 .border(1.5.dp, glassBorderBrush, RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
