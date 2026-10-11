@@ -2116,6 +2116,7 @@ fun LibraryScreen(
         }
     }
 }
+
 // =========================================================================
 // 📌 PLAYLIST DETAIL SCREEN
 // =========================================================================
@@ -2156,10 +2157,8 @@ fun PlaylistDetailScreen(
         }.toImmutableList()
     }
 
-    val isAnyPlaylistInnerDialogOpen = showAddSongsSearchPicker
-
     val animatedPlaylistBlur by animateDpAsState(
-        targetValue = if (isAnyPlaylistInnerDialogOpen) 28.dp else 0.dp,
+        targetValue = if (showAddSongsSearchPicker) 28.dp else 0.dp,
         animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing),
         label = "playlistBlurAnim"
     )
@@ -2216,7 +2215,6 @@ fun PlaylistDetailScreen(
                             SortListVector(tint = accent, modifier = Modifier.size(18.dp))
                         }
 
-                        // ⚡ Frosted Glassmorphic Dropdown Menu
                         GlassmorphicDropdownMenu(
                             expanded = showSortMenu,
                             onDismissRequest = { showSortMenu = false },
@@ -2366,10 +2364,15 @@ fun PlaylistDetailScreen(
 
     if (showAddSongsSearchPicker) {
         Box(modifier = Modifier.zIndex(999f)) {
-            PlaylistAddSearchDialog(playlist = playlist, manager = manager, onDismiss = { showAddSongsSearchPicker = false }, onNavigateToFolder = { folder ->
-                showAddSongsSearchPicker = false
-                onFolderClick(folder)
-            })
+            PlaylistAddSearchDialog(
+                playlist = playlist,
+                manager = manager,
+                onDismiss = { showAddSongsSearchPicker = false },
+                onNavigateToFolder = { folder ->
+                    showAddSongsSearchPicker = false
+                    onFolderClick(folder)
+                }
+            )
         }
     }
 }
@@ -2459,7 +2462,6 @@ fun FolderSongsScreen(
                             SortListVector(tint = accent, modifier = Modifier.size(18.dp))
                         }
 
-                        // ⚡ Frosted Glassmorphic Dropdown Menu
                         GlassmorphicDropdownMenu(
                             expanded = showSortMenu,
                             onDismissRequest = { showSortMenu = false },
@@ -2598,7 +2600,7 @@ fun FolderSongsScreen(
 }
 
 // =========================================================================
-// 📌 MANAGE PLAYLISTS DIALOG (With 120Hz Floating Drag & Edge Auto-Scroll)
+// 📌 MANAGE PLAYLISTS DIALOG
 // =========================================================================
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -2813,7 +2815,12 @@ fun ManagePlaylistsDialog(
                                         modifier = Modifier
                                             .size(34.dp)
                                             .clip(CircleShape)
-                                            .background(Color(0x1AEF4444)),
+                                            .background(Color(0x1AEF4444))
+                                            .clickable {
+                                                manager.triggerHapticFeedback(true)
+                                                manager.removePlaylist(pl)
+                                                tempList.remove(pl)
+                                            },
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Text("🗑", fontSize = 14.sp)
@@ -2959,13 +2966,22 @@ fun ManagePlaylistsDialog(
 }
 
 // =========================================================================
-// 📌 CREATE PLAYLIST DIALOG
+// 📌 CREATE PLAYLIST DIALOG (Alphabetically Sorted Folders A to Z)
 // =========================================================================
 
 @Composable
 fun CreatePlaylistDialog(manager: MusicManager, onDismiss: () -> Unit) {
     var name by remember { mutableStateOf("") }
-    val folders: ImmutableList<String> = remember(manager.allSongs.size) { manager.allSongs.map { it.folderName }.distinct().toImmutableList() }
+    
+    // Sorted alphabetically A-Z
+    val folders: ImmutableList<String> = remember(manager.allSongs.size) { 
+        manager.allSongs
+            .map { it.folderName }
+            .distinct()
+            .sortedBy { it.lowercase(Locale.getDefault()) }
+            .toImmutableList() 
+    }
+    
     var selectedFolderToPin by remember { mutableStateOf<String?>(null) }
     val isDark = manager.isDarkMode
     val textColor = manager.getCurrentTextColor()
@@ -3034,7 +3050,7 @@ fun CreatePlaylistDialog(manager: MusicManager, onDismiss: () -> Unit) {
                     )
                 )
                 Spacer(modifier = Modifier.height(14.dp))
-                Text("Or Pin an Entire Device Folder:", color = Color(0xFF64748B), fontSize = 12.sp)
+                Text("Or Pin an Entire Device Folder (A-Z):", color = Color(0xFF64748B), fontSize = 12.sp)
                 Spacer(modifier = Modifier.height(8.dp))
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(
@@ -3151,7 +3167,6 @@ fun ShimmerSkeletonGridItem(aspectRatio: Float = 1f, isDark: Boolean, isHero: Bo
     )
 }
 
-// ⚡ Hardware Bitmap-Cached Square Album Card: Individual Track Art + Music Note Fallback
 @UnstableApi
 @Composable
 fun SquareAlbumOverlayCard(
@@ -3236,7 +3251,6 @@ fun SquareAlbumOverlayCard(
     }
 }
 
-// ⚡ Hardware Bitmap-Cached Hero Album Card: Individual Track Art + Music Note Fallback
 @UnstableApi
 @Composable
 fun HeroAlbumCard(
@@ -3449,7 +3463,6 @@ fun GridSizeDialog(
     }
 }
 
-// ArrangePlaylistsDialog
 @Composable
 fun ArrangePlaylistsDialog(
     manager: MusicManager,
@@ -3926,7 +3939,7 @@ fun LibraryFolderSquareCard(
 }
 
 // =========================================================================
-// 📌 SEARCH SCREEN (With Double-Tap / Re-click Auto-Focus & Soft Keyboard)
+// 📌 SEARCH SCREEN
 // =========================================================================
 
 @UnstableApi
@@ -3985,7 +3998,6 @@ fun SearchScreen(
     val textColor = manager.getCurrentTextColor()
     val glassBorderBrush = manager.getGlassBorderBrush()
 
-    // 🚀 React to Search Tab double-tap / re-click to request focus & open software keyboard
     LaunchedEffect(focusSearchTrigger) {
         if (focusSearchTrigger > 0L) {
             delay(120)
@@ -4165,8 +4177,17 @@ fun SearchScreen(
     }
 }
 
+// =========================================================================
+// 📌 PLAYLIST ADD SEARCH DIALOG (Matches Exact Reference Height, Icons & Sorting)
+// =========================================================================
+
 @Composable
-fun PlaylistAddSearchDialog(playlist: Playlist, manager: MusicManager, onDismiss: () -> Unit, onNavigateToFolder: (String) -> Unit) {
+fun PlaylistAddSearchDialog(
+    playlist: Playlist,
+    manager: MusicManager,
+    onDismiss: () -> Unit,
+    onNavigateToFolder: (String) -> Unit
+) {
     val isDark = manager.isDarkMode
     val textColor = manager.getCurrentTextColor()
     val accent = manager.accentColor
@@ -4178,7 +4199,15 @@ fun PlaylistAddSearchDialog(playlist: Playlist, manager: MusicManager, onDismiss
         if (q.isEmpty()) manager.allSongs.toImmutableList()
         else manager.allSongs.filter { it.title.contains(q, ignoreCase = true) || it.artist.contains(q, ignoreCase = true) }.toImmutableList()
     }
-    val folders: ImmutableList<String> = remember(manager.allSongs.size) { manager.allSongs.map { it.folderName }.distinct().toImmutableList() }
+    
+    // Alphabetically Sorted A-Z
+    val folders: ImmutableList<String> = remember(manager.allSongs.size) {
+        manager.allSongs
+            .map { it.folderName }
+            .distinct()
+            .sortedBy { it.lowercase(Locale.getDefault()) }
+            .toImmutableList()
+    }
 
     val dialogSurface = manager.getCurrentDialogColor()
     val glassBorderBrush = manager.getGlassBorderBrush()
@@ -4197,16 +4226,20 @@ fun PlaylistAddSearchDialog(playlist: Playlist, manager: MusicManager, onDismiss
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(600.dp)
+                .fillMaxHeight(0.85f) // Matches reference image height
+                .imePadding()
                 .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
                 .background(dialogSurface)
                 .border(1.5.dp, glassBorderBrush, RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
+                .clickable(enabled = false) {}
                 .padding(20.dp)
         ) {
-            Column {
+            Column(modifier = Modifier.fillMaxSize()) {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Text("Add Songs to ${playlist.name}", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = textColor)
-                    Button(onClick = { onDismiss() }, shape = RoundedCornerShape(8.dp)) { Text("Done") }
+                    Button(onClick = onDismiss, shape = RoundedCornerShape(8.dp), colors = ButtonDefaults.buttonColors(containerColor = accent)) { 
+                        Text("Done", color = Color.White, fontWeight = FontWeight.Bold) 
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(10.dp))
@@ -4237,7 +4270,7 @@ fun PlaylistAddSearchDialog(playlist: Playlist, manager: MusicManager, onDismiss
                             )
                         )
                         Spacer(modifier = Modifier.height(10.dp))
-                        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             items(
                                 items = filteredSongs,
                                 key = { it.id },
@@ -4260,23 +4293,44 @@ fun PlaylistAddSearchDialog(playlist: Playlist, manager: MusicManager, onDismiss
                         }
                     }
                     1 -> {
-                        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        // "By Folder" Tab: Uses uniform GlassmorphicFolderIcon and A-Z ordering
+                        LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             items(
                                 items = folders,
                                 key = { it },
                                 contentType = { "dialog_folder_row" }
                             ) { folder ->
                                 val count = remember(folder, manager.allSongs.size) { manager.allSongs.count { it.folderName == folder } }
-                                Row(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(if (isDark) Color(0x1AFFFFFF) else Color(0xFFF1F5F9)).padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                                    Column(modifier = Modifier.clickable { onNavigateToFolder(folder) }) {
-                                        Text("📁 $folder", color = textColor, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                                        Text("$count songs • Tap to view", color = manager.accentColor, fontSize = 11.sp)
+                                val folderColor = manager.getFolderColor(folder)
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(if (isDark) Color(0x1AFFFFFF) else Color(0xFFF1F5F9))
+                                        .padding(12.dp), 
+                                    horizontalArrangement = Arrangement.SpaceBetween, 
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.weight(1f).clickable { onNavigateToFolder(folder) }
+                                    ) {
+                                        GlassmorphicFolderIcon(folderColor = folderColor, modifier = Modifier.size(28.dp))
+                                        Spacer(modifier = Modifier.width(12.dp))
+                                        Column {
+                                            Text(folder, color = textColor, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                            Text("$count songs • Tap to view", color = manager.accentColor, fontSize = 11.sp)
+                                        }
                                     }
-                                    Button(onClick = {
-                                        val folderSongIds = manager.allSongs.filter { it.folderName == folder }.map { it.id }
-                                        folderSongIds.forEach { manager.addSongToPlaylist(it, playlist) }
-                                    }, shape = RoundedCornerShape(8.dp)) {
-                                        Text("Add All", fontSize = 11.sp)
+                                    Button(
+                                        onClick = {
+                                            val folderSongIds = manager.allSongs.filter { it.folderName == folder }.map { it.id }
+                                            folderSongIds.forEach { manager.addSongToPlaylist(it, playlist) }
+                                        }, 
+                                        shape = RoundedCornerShape(8.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = accent)
+                                    ) {
+                                        Text("Add All", fontSize = 11.sp, color = Color.White, fontWeight = FontWeight.Bold)
                                     }
                                 }
                             }
@@ -4284,18 +4338,37 @@ fun PlaylistAddSearchDialog(playlist: Playlist, manager: MusicManager, onDismiss
                     }
                     2 -> {
                         val otherPlaylists: ImmutableList<Playlist> = remember(manager.customPlaylists.size) {
-                            manager.customPlaylists.filter { it.id != playlist.id }.toImmutableList()
+                            manager.customPlaylists
+                                .filter { it.id != playlist.id }
+                                .sortedBy { it.name.lowercase(Locale.getDefault()) }
+                                .toImmutableList()
                         }
-                        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             items(
                                 items = otherPlaylists,
                                 key = { it.id },
                                 contentType = { "dialog_copy_playlist_row" }
                             ) { pl ->
-                                Row(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(if (isDark) Color(0x1AFFFFFF) else Color(0xFFF1F5F9)).padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                                    Text("${pl.name} (${pl.songIds.size} songs)", color = textColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                                    Button(onClick = { pl.songIds.forEach { manager.addSongToPlaylist(it, playlist) } }, shape = RoundedCornerShape(8.dp)) {
-                                        Text("Copy All", fontSize = 11.sp)
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(if (isDark) Color(0x1AFFFFFF) else Color(0xFFF1F5F9))
+                                        .padding(12.dp), 
+                                    horizontalArrangement = Arrangement.SpaceBetween, 
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                        GlassmorphicFolderIcon(folderColor = Color(pl.iconColorHex), modifier = Modifier.size(28.dp))
+                                        Spacer(modifier = Modifier.width(12.dp))
+                                        Text(pl.name, color = textColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                                    }
+                                    Button(
+                                        onClick = { pl.songIds.forEach { manager.addSongToPlaylist(it, playlist) } }, 
+                                        shape = RoundedCornerShape(8.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = accent)
+                                    ) {
+                                        Text("Copy All", fontSize = 11.sp, color = Color.White, fontWeight = FontWeight.Bold)
                                     }
                                 }
                             }
@@ -4306,6 +4379,10 @@ fun PlaylistAddSearchDialog(playlist: Playlist, manager: MusicManager, onDismiss
         }
     }
 }
+
+// =========================================================================
+// 📌 FILTERED SONGS SCREEN
+// =========================================================================
 
 @UnstableApi
 @Composable
@@ -4425,6 +4502,10 @@ fun FilteredSongsScreen(
     }
 }
 
+// =========================================================================
+// 📌 SONG ACTION MODAL & DIALOGS
+// =========================================================================
+
 @Composable
 fun SongItemActionModal(
     manager: MusicManager,
@@ -4488,7 +4569,7 @@ fun SongItemActionModal(
 
                 Spacer(modifier = Modifier.height(10.dp))
                 Button(
-                    onClick = { onDismiss() },
+                    onClick = onDismiss,
                     modifier = Modifier.fillMaxWidth().height(48.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = if (isDark) Color(0x22FFFFFF) else Color(0xFFF1F5F9)),
                     shape = RoundedCornerShape(12.dp)
@@ -4549,7 +4630,7 @@ fun SongInfoDialog(manager: MusicManager, song: Song, isDark: Boolean, onDismiss
                 Text("Path: ${song.path}", color = Color(0xFF64748B), fontSize = 11.sp, maxLines = 2)
                 Spacer(modifier = Modifier.height(18.dp))
                 Button(
-                    onClick = { onDismiss() },
+                    onClick = onDismiss,
                     modifier = Modifier.fillMaxWidth().height(48.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = if (isDark) Color(0x22FFFFFF) else Color(0xFFF1F5F9)),
                     shape = RoundedCornerShape(12.dp)
@@ -4561,7 +4642,10 @@ fun SongInfoDialog(manager: MusicManager, song: Song, isDark: Boolean, onDismiss
     }
 }
 
-// 🚀 Enhanced BottomNavBar with double-click and re-click soft keyboard triggers
+// =========================================================================
+// 📌 BOTTOM NAVIGATION BAR
+// =========================================================================
+
 @Composable
 fun BottomNavBar(
     manager: MusicManager,
@@ -4620,7 +4704,6 @@ fun BottomNavBar(
     }
 }
 
-// ⚡ 120Hz Hardware-Buffered Recently Played Card with Individual Bitmap Artwork & Fallback
 @UnstableApi
 @Composable
 fun RecentlyPlayedCard(song: Song, manager: MusicManager, onClick: () -> Unit) {
@@ -4791,7 +4874,6 @@ fun TopBar(manager: MusicManager, onProfileClick: () -> Unit, onSettingsClick: (
     }
 }
 
-// ⚡ 120Hz Hardware-Buffered Universal Song Row with Individual Bitmap Artwork & Fallback
 @UnstableApi
 @Composable
 fun UniversalSongRow(song: Song, manager: MusicManager, isDark: Boolean, onPlay: () -> Unit, onMenuClick: () -> Unit) {
