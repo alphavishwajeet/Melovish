@@ -35,6 +35,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -64,7 +65,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MenuDefaults
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Slider
@@ -82,6 +86,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
@@ -115,6 +120,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
@@ -124,10 +130,96 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.roundToInt
+
+// =========================================================================
+// 📌 SEAMLESS FROSTED GLASS DROPDOWN MENU (Slider Controlled, Single Corner)
+// =========================================================================
+
+@Composable
+fun GlassmorphicDropdownMenu(
+    expanded: Boolean,
+    onDismissRequest: () -> Unit,
+    manager: MusicManager,
+    modifier: Modifier = Modifier,
+    offset: DpOffset = DpOffset(0.dp, 8.dp),
+    content: @Composable ColumnScope.() -> Unit
+) {
+    val isDark = manager.isDarkMode
+    val glassBorderBrush = manager.getGlassBorderBrush()
+    val dialogColor = manager.getCurrentDialogColor()
+    val menuCornerShape = RoundedCornerShape(18.dp)
+
+    val baseScrimAlpha = (0.75f + (manager.frostedGlassOpacity * 0.22f)).coerceIn(0.68f, 0.98f)
+    val diffusionUnderlay = if (isDark) {
+        Color(0xFF0F172A).copy(alpha = baseScrimAlpha)
+    } else {
+        Color(0xFFF8FAFC).copy(alpha = baseScrimAlpha)
+    }
+
+    DropdownMenu(
+        expanded = expanded,
+        onDismissRequest = onDismissRequest,
+        offset = offset,
+        shape = menuCornerShape,
+        containerColor = Color.Transparent,
+        shadowElevation = 0.dp,
+        tonalElevation = 0.dp,
+        border = null,
+        modifier = modifier
+            .shadow(
+                elevation = 20.dp,
+                shape = menuCornerShape,
+                spotColor = if (isDark) Color.Black.copy(alpha = 0.90f) else Color(0x66000000),
+                ambientColor = if (isDark) Color.Black else Color(0x33000000)
+            )
+            .clip(menuCornerShape)
+            .background(diffusionUnderlay)
+            .background(dialogColor)
+            .border(1.2.dp, glassBorderBrush, menuCornerShape)
+            .padding(vertical = 4.dp),
+        content = content
+    )
+}
+
+@Composable
+fun GlassDropdownMenuItem(
+    text: String,
+    isSelected: Boolean,
+    manager: MusicManager,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val textColor = manager.getCurrentTextColor()
+    val accent = manager.accentColor
+    val itemShape = RoundedCornerShape(12.dp)
+
+    DropdownMenuItem(
+        text = {
+            Text(
+                text = text,
+                color = if (isSelected) accent else textColor,
+                fontSize = 14.sp,
+                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+            )
+        },
+        onClick = onClick,
+        colors = MenuDefaults.itemColors(
+            textColor = textColor,
+            leadingIconColor = textColor,
+            trailingIconColor = textColor
+        ),
+        modifier = modifier
+            .padding(horizontal = 6.dp, vertical = 2.dp)
+            .clip(itemShape)
+            .background(if (isSelected) accent.copy(alpha = 0.15f) else Color.Transparent)
+    )
+}
 
 // Live Animated 4-Bar Equalizer
 @Composable
@@ -266,6 +358,7 @@ fun FolderColorDialog(
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .zIndex(999f)
             .background(if (isDark) Color(0x66000000) else Color(0x40000000))
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
@@ -719,6 +812,7 @@ fun FullPlayerSheet(manager: MusicManager, onDismiss: () -> Unit) {
     val isDark = manager.isDarkMode
     val userAccent = manager.accentColor
     val monoColor = if (isDark) Color(0xFFF8FAFC) else Color(0xFF0F172A)
+    val coroutineScope = rememberCoroutineScope()
 
     val currentQueue = remember(manager.playbackQueue.size, manager.playbackQueue.toList()) {
         if (manager.playbackQueue.isNotEmpty()) manager.playbackQueue.toList()
@@ -736,8 +830,9 @@ fun FullPlayerSheet(manager: MusicManager, onDismiss: () -> Unit) {
     )
 
     var isProgrammaticScroll by remember { mutableStateOf(false) }
+    var isQueueReorderingActive by remember { mutableStateOf(false) }
 
-    LaunchedEffect(manager.currentSong?.id) {
+    LaunchedEffect(manager.currentSong?.id, currentQueue) {
         val targetIdx = currentQueue.indexOfFirst { it.id == manager.currentSong?.id }
         if (targetIdx != -1 && targetIdx != pagerState.currentPage && !pagerState.isScrollInProgress) {
             isProgrammaticScroll = true
@@ -746,9 +841,9 @@ fun FullPlayerSheet(manager: MusicManager, onDismiss: () -> Unit) {
         }
     }
 
-    LaunchedEffect(pagerState) {
+    LaunchedEffect(pagerState, isQueueReorderingActive) {
         snapshotFlow { pagerState.isScrollInProgress to pagerState.settledPage }.collect { (inProgress, settledPage) ->
-            if (!inProgress && !isProgrammaticScroll && settledPage in currentQueue.indices) {
+            if (!inProgress && !isProgrammaticScroll && !isQueueReorderingActive && settledPage in currentQueue.indices) {
                 val targetSong = currentQueue[settledPage]
                 if (targetSong.id != manager.currentSong?.id) {
                     manager.playSong(targetSong, currentQueue, manager.currentSectionName)
@@ -883,7 +978,7 @@ fun FullPlayerSheet(manager: MusicManager, onDismiss: () -> Unit) {
                 beyondViewportPageCount = 1,
                 flingBehavior = PagerDefaults.flingBehavior(
                     state = pagerState,
-                    snapAnimationSpec = spring(stiffness = 700f, dampingRatio = 0.90f)
+                    snapAnimationSpec = spring(stiffness = 550f, dampingRatio = 0.85f)
                 ),
                 modifier = Modifier.weight(1f).fillMaxWidth()
             ) { pageIndex ->
@@ -1245,6 +1340,7 @@ fun FullPlayerSheet(manager: MusicManager, onDismiss: () -> Unit) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
+                    .zIndex(100f)
                     .background(if (isDark) Color(0x66000000) else Color(0x40000000))
             )
         }
@@ -1253,6 +1349,7 @@ fun FullPlayerSheet(manager: MusicManager, onDismiss: () -> Unit) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
+                    .zIndex(999f)
                     .background(Color.Transparent)
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
@@ -1323,7 +1420,7 @@ fun FullPlayerSheet(manager: MusicManager, onDismiss: () -> Unit) {
             visible = showQueueSheet,
             enter = slideInVertically(initialOffsetY = { it }, animationSpec = spring(stiffness = 500f, dampingRatio = 0.85f)),
             exit = slideOutVertically(targetOffsetY = { it }, animationSpec = spring(stiffness = 500f, dampingRatio = 0.85f)),
-            modifier = Modifier.fillMaxSize().zIndex(20f)
+            modifier = Modifier.fillMaxSize().zIndex(999f)
         ) {
             QueueSheet(
                 manager = manager,
@@ -1334,6 +1431,18 @@ fun FullPlayerSheet(manager: MusicManager, onDismiss: () -> Unit) {
                 subTextColor = animTextSecondary,
                 accent = userAccent,
                 isDark = isDark,
+                onReorderStateChange = { active ->
+                    isQueueReorderingActive = active
+                },
+                onItemMoved = { movedSong, newIndex ->
+                    if (movedSong.id == manager.currentSong?.id) {
+                        coroutineScope.launch {
+                            isProgrammaticScroll = true
+                            pagerState.scrollToPage(newIndex)
+                            isProgrammaticScroll = false
+                        }
+                    }
+                },
                 onDismiss = { showQueueSheet = false }
             )
         }
@@ -1359,6 +1468,8 @@ fun QueueSheet(
     subTextColor: Color,
     accent: Color,
     isDark: Boolean,
+    onReorderStateChange: (Boolean) -> Unit = {},
+    onItemMoved: (Song, Int) -> Unit = { _, _ -> },
     onDismiss: () -> Unit
 ) {
     val density = LocalDensity.current
@@ -1388,8 +1499,8 @@ fun QueueSheet(
     var fingerYInList by remember { mutableFloatStateOf(-1f) }
     var grabOffsetY by remember { mutableFloatStateOf(itemHeightPx / 2f) }
 
-    // 120Hz VSYNC Auto-Scroll Loop: Continuous non-dropping grip and clean deceleration
     LaunchedEffect(draggingSongId) {
+        onReorderStateChange(draggingSongId != null)
         if (draggingSongId != null) {
             var lastFrameTimeNanos = 0L
 
@@ -1405,20 +1516,16 @@ fun QueueSheet(
                     if (containerHeightPx > (edgeZonePx * 2f)) {
                         val bottomTriggerY = containerHeightPx - edgeZonePx
 
-                        // True 3-Zone Geometry with Deceleration
                         val scrollSpeed: Float = when {
-                            // Top Zone: smooth upward scroll, decelerating to 0 as finger pulls down toward dead zone
                             fingerYInList <= edgeZonePx -> {
                                 val ratio = (1f - (fingerYInList.coerceAtLeast(0f) / edgeZonePx)).coerceIn(0f, 1f)
                                 -(maxScrollSpeedPxPerSec * (ratio * ratio))
                             }
-                            // Bottom Zone: smooth downward scroll, decelerating to 0 as finger pulls up toward dead zone
                             fingerYInList >= bottomTriggerY -> {
                                 val distFromBottom = (containerHeightPx - fingerYInList).coerceAtLeast(0f)
                                 val ratio = (1f - (distFromBottom / edgeZonePx)).coerceIn(0f, 1f)
                                 (maxScrollSpeedPxPerSec * (ratio * ratio))
                             }
-                            // Central Dead Zone: NO auto-scrolling
                             else -> 0f
                         }
 
@@ -1444,8 +1551,8 @@ fun QueueSheet(
                                         val clampedTarget = targetIndex.coerceIn(0, tempQueue.size - 1)
                                         if (clampedTarget != fromIndex) {
                                             manager.triggerHapticFeedback(false)
-                                            val moved = tempQueue.removeAt(fromIndex)
-                                            tempQueue.add(clampedTarget, moved)
+                                            val movedSong = tempQueue.removeAt(fromIndex)
+                                            tempQueue.add(clampedTarget, movedSong)
                                         }
                                     }
                                 }
@@ -1490,6 +1597,7 @@ fun QueueSheet(
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .zIndex(999f)
             .background(if (isDark) Color(0x66000000) else Color(0x40000000))
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
@@ -1661,7 +1769,6 @@ fun QueueSheet(
 
                                                     val currentId = draggingSongId
                                                     val bottomTriggerY = containerHeightPx - edgeZonePx
-                                                    // Process drag hit testing cleanly in the center zone
                                                     if (currentId != null && fingerYInList > edgeZonePx && fingerYInList < bottomTriggerY) {
                                                         val visibleItems = listState.layoutInfo.visibleItemsInfo
                                                         val hitItem = visibleItems.find { item ->
@@ -1685,6 +1792,7 @@ fun QueueSheet(
                                                     val originalIndex = manager.playbackQueue.indexOfFirst { it.id == song.id }
                                                     if (finalIndex != -1 && originalIndex != -1 && finalIndex != originalIndex) {
                                                         manager.moveQueueItem(originalIndex, finalIndex)
+                                                        onItemMoved(song, finalIndex)
                                                     }
                                                     draggingSongId = null
                                                     fingerYInList = -1f
@@ -1706,7 +1814,6 @@ fun QueueSheet(
                         }
                     }
 
-                    // True Independent Floating Overlay Card: Follows finger across the full display
                     if (draggingSongId != null && fingerYInList >= -150f) {
                         val draggedSong = tempQueue.find { it.id == draggingSongId }
                         if (draggedSong != null) {
@@ -1816,6 +1923,7 @@ fun EqualizerSheet(manager: MusicManager, onDismiss: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .zIndex(999f)
             .background(if (isDark) Color(0x66000000) else Color(0x40000000))
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
@@ -2162,10 +2270,14 @@ fun MenuRow(icon: String, text: String, isDark: Boolean, isDanger: Boolean = fal
     }
 }
 
-// Mini Player Dock with Frosted Specular Border & Uniform Clean Background
+// Mini Player Dock with Frosted Specular Border & Individual Track Artwork
 @UnstableApi
 @Composable
-fun MiniPlayerDock(manager: MusicManager, onClick: () -> Unit) {
+fun MiniPlayerDock(
+    manager: MusicManager,
+    onClick: () -> Unit,
+    onDismiss: () -> Unit = {}
+) {
     val song = manager.currentSong ?: return
     val accent = manager.accentColor
     val isDark = manager.isDarkMode
@@ -2175,40 +2287,82 @@ fun MiniPlayerDock(manager: MusicManager, onClick: () -> Unit) {
         if (albumArtBitmap == null) albumArtBitmap = manager.loadAlbumArtAsync(song)
     }
 
+    val baseScrimAlpha = (0.55f + (manager.frostedGlassOpacity * 0.40f)).coerceIn(0.50f, 0.96f)
+    val scrimColor = if (isDark) Color(0xFF050811).copy(alpha = baseScrimAlpha) else Color(0xFFE2E8F0).copy(alpha = baseScrimAlpha)
+    val dialogColor = manager.getCurrentDialogColor()
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 6.dp)
+            .padding(horizontal = 14.dp, vertical = 6.dp)
+            .shadow(
+                elevation = 16.dp,
+                shape = RoundedCornerShape(22.dp),
+                spotColor = accent.copy(alpha = 0.35f),
+                ambientColor = if (isDark) Color.Black.copy(alpha = 0.70f) else Color(0x44000000)
+            )
             .clip(RoundedCornerShape(22.dp))
-            .background(manager.getCurrentBackgroundColor().copy(alpha = 0.85f))
-            .background(manager.getCurrentSurfaceColor())
+            .background(scrimColor)
+            .background(dialogColor)
             .border(1.2.dp, manager.getGlassBorderBrush(), RoundedCornerShape(22.dp))
-            .pointerInput(Unit) {
+            .pointerInput(manager.isPlaying) {
                 detectVerticalDragGestures { _, dragAmount ->
-                    if (dragAmount < -24f) {
+                    if (dragAmount < -22f) {
                         onClick()
+                    } else if (dragAmount > 32f && !manager.isPlaying) {
+                        manager.triggerHapticFeedback(false)
+                        onDismiss()
                     }
                 }
             }
             .clickable { onClick() }
-            .padding(horizontal = 14.dp, vertical = 8.dp)
+            .padding(horizontal = 14.dp, vertical = 9.dp)
     ) {
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Box(modifier = Modifier.size(44.dp).clip(RoundedCornerShape(10.dp)).background(Color(0xFF1E293B)), contentAlignment = Alignment.Center) {
+            Box(
+                modifier = Modifier
+                    .size(46.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color(0xFF1E293B)),
+                contentAlignment = Alignment.Center
+            ) {
                 if (albumArtBitmap != null) {
-                    Image(bitmap = albumArtBitmap!!.asImageBitmap(), contentDescription = "Art", modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                    Image(
+                        bitmap = albumArtBitmap!!.asImageBitmap(),
+                        contentDescription = "Art",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
                 } else {
                     Text("🎵", fontSize = 20.sp)
                 }
             }
+
             Spacer(modifier = Modifier.width(12.dp))
+
             Column(modifier = Modifier.weight(1f)) {
-                Text(song.title, color = manager.getCurrentTextColor(), fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text("${formatFileSize(song.size)} • ${if (song.artist.isNotBlank()) song.artist else "Melovish"}", color = accent, fontSize = 11.sp, maxLines = 1)
+                Text(
+                    text = song.title,
+                    color = manager.getCurrentTextColor(),
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = "${formatFileSize(song.size)} • ${if (song.artist.isNotBlank()) song.artist else "Melovish"}",
+                    color = accent,
+                    fontSize = 11.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
+
+            Spacer(modifier = Modifier.width(8.dp))
+
             Box(
                 modifier = Modifier
-                    .size(40.dp)
+                    .size(42.dp)
                     .shadow(elevation = 6.dp, shape = CircleShape, spotColor = accent)
                     .clip(CircleShape)
                     .background(accent)
@@ -2257,6 +2411,7 @@ fun SleepTimerDialog(manager: MusicManager, onDismiss: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .zIndex(999f)
             .background(if (isDark) Color(0x66000000) else Color(0x40000000))
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
@@ -2396,6 +2551,7 @@ fun LyricsDialog(song: Song, manager: MusicManager, onDismiss: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .zIndex(999f)
             .background(if (isDark) Color(0x66000000) else Color(0x40000000))
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
@@ -2444,6 +2600,7 @@ fun AddToPlaylistDialog(manager: MusicManager, song: Song, onDismiss: () -> Unit
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .zIndex(999f)
             .background(if (isDark) Color(0x66000000) else Color(0x40000000))
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
@@ -2580,6 +2737,7 @@ fun MagneticSpeedDialog(manager: MusicManager, onDismiss: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .zIndex(999f)
             .background(if (isDark) Color(0x66000000) else Color(0x40000000))
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },

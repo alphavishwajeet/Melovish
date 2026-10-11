@@ -33,6 +33,7 @@ import android.provider.Settings
 import android.util.LruCache
 import android.view.HapticFeedbackConstants
 import android.widget.Toast
+import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.IntentSenderRequest
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -101,7 +102,7 @@ data class PendingTagWrite(
 )
 
 @UnstableApi
-class MusicManager(private val context: Context) {
+class MusicManager(val context: Context) {
 
     companion object {
         @Volatile
@@ -112,12 +113,16 @@ class MusicManager(private val context: Context) {
     private var attachedActivity: MainActivity? = null
     private var pendingStorageWrite: PendingTagWrite? = null
 
+    // Activity Result Launcher for scoped storage write operations
+    var writeRequestLauncher: ActivityResultLauncher<IntentSenderRequest>? = null
+
     fun attachActivity(activity: MainActivity) {
         attachedActivity = activity
     }
 
     fun detachActivity() {
         attachedActivity = null
+        writeRequestLauncher = null
     }
 
     private val exceptionHandler = CoroutineExceptionHandler { _, throwable ->
@@ -174,7 +179,9 @@ class MusicManager(private val context: Context) {
                 @Suppress("DEPRECATION")
                 vibrator?.vibrate(if (isStrong) 20L else 10L)
             }
-        } catch (_: Exception) {}
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+        }
     }
 
     fun toggleHaptics(enabled: Boolean) {
@@ -196,7 +203,13 @@ class MusicManager(private val context: Context) {
             enableAudioTrackPlaybackParams: Boolean
         ): AudioSink {
             return DefaultAudioSink.Builder(context)
-                .setAudioProcessors(arrayOf(channelMixingAudioProcessor))
+                .setAudioProcessors(
+                    arrayOf(
+                        channelMixingAudioProcessor,
+                        AudioEffectsManager.spatialProcessor,
+                        AudioEffectsManager.lofiProcessor
+                    )
+                )
                 .setEnableFloatOutput(true)
                 .setEnableAudioTrackPlaybackParams(true)
                 .build()
@@ -262,7 +275,8 @@ class MusicManager(private val context: Context) {
         return try {
             if (saved == null || saved == "DETAILED_LIST") GridViewMode.LIST
             else GridViewMode.valueOf(saved)
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
             GridViewMode.LIST
         }
     }
@@ -278,7 +292,8 @@ class MusicManager(private val context: Context) {
     var currentSortOrder by mutableStateOf(
         try {
             SongSortOrder.valueOf(prefs.getString("saved_song_sort", SongSortOrder.A_TO_Z.name) ?: SongSortOrder.A_TO_Z.name)
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
             SongSortOrder.A_TO_Z
         }
     )
@@ -286,7 +301,8 @@ class MusicManager(private val context: Context) {
     var currentFolderSortOrder by mutableStateOf(
         try {
             FolderSortOrder.valueOf(prefs.getString("saved_folder_sort", FolderSortOrder.A_TO_Z.name) ?: FolderSortOrder.A_TO_Z.name)
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
             FolderSortOrder.A_TO_Z
         }
     )
@@ -294,7 +310,8 @@ class MusicManager(private val context: Context) {
     var folderInnerSortOrder by mutableStateOf(
         try {
             SongSortOrder.valueOf(prefs.getString("folder_inner_sort", SongSortOrder.A_TO_Z.name) ?: SongSortOrder.A_TO_Z.name)
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
             SongSortOrder.A_TO_Z
         }
     )
@@ -302,7 +319,8 @@ class MusicManager(private val context: Context) {
     var artistsSortOrder by mutableStateOf(
         try {
             ArtistSortOrder.valueOf(prefs.getString("pref_sort_artists", ArtistSortOrder.NAME_A_TO_Z.name) ?: ArtistSortOrder.NAME_A_TO_Z.name)
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
             ArtistSortOrder.NAME_A_TO_Z
         }
     )
@@ -310,7 +328,8 @@ class MusicManager(private val context: Context) {
     var artistInnerSortOrder by mutableStateOf(
         try {
             SongSortOrder.valueOf(prefs.getString("pref_sort_artist_inner", SongSortOrder.A_TO_Z.name) ?: SongSortOrder.A_TO_Z.name)
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
             SongSortOrder.A_TO_Z
         }
     )
@@ -318,13 +337,14 @@ class MusicManager(private val context: Context) {
     var playlistInnerSortOrder by mutableStateOf(
         try {
             SongSortOrder.valueOf(prefs.getString("playlist_inner_sort", SongSortOrder.A_TO_Z.name) ?: SongSortOrder.A_TO_Z.name)
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
             SongSortOrder.A_TO_Z
         }
     )
 
     // =========================================================================
-    // 🎨 COMPREHENSIVE THEME & SPECULAR FROSTED GLASS ENGINE
+    // THEME & SPECULAR FROSTED GLASS ENGINE
     // =========================================================================
 
     var themeMode by mutableStateOf(prefs.getString("theme_mode", "System") ?: "System")
@@ -333,7 +353,8 @@ class MusicManager(private val context: Context) {
     var darkThemeSubStyle by mutableStateOf(
         try {
             DarkThemeSubStyle.valueOf(prefs.getString("pref_dark_sub_style", DarkThemeSubStyle.BLUISH.name) ?: DarkThemeSubStyle.BLUISH.name)
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
             DarkThemeSubStyle.BLUISH
         }
     )
@@ -341,7 +362,8 @@ class MusicManager(private val context: Context) {
     var lightThemeSubStyle by mutableStateOf(
         try {
             LightThemeSubStyle.valueOf(prefs.getString("pref_light_sub_style", LightThemeSubStyle.WHITE.name) ?: LightThemeSubStyle.WHITE.name)
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
             LightThemeSubStyle.WHITE
         }
     )
@@ -543,7 +565,8 @@ class MusicManager(private val context: Context) {
                 prefs.getString("pager_transition_effect", PagerTransitionEffect.CASCADE.name)
                     ?: PagerTransitionEffect.CASCADE.name
             )
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
             PagerTransitionEffect.CASCADE
         }
     )
@@ -593,7 +616,8 @@ class MusicManager(private val context: Context) {
     var profileEmail by mutableStateOf(prefs.getString("prof_email", "") ?: "")
     var profileImagePath by mutableStateOf(prefs.getString("prof_image_path", null))
 
-    private val maxCacheSize = (Runtime.getRuntime().maxMemory() / 1024 / 8).toInt().coerceAtLeast(1024 * 16)
+    // Hardware Memory-Safe Image Cache (16% of runtime RAM)
+    private val maxCacheSize = (Runtime.getRuntime().maxMemory() / 1024 / 6).toInt().coerceAtLeast(1024 * 32)
     private val memoryCache = object : LruCache<Long, Bitmap>(maxCacheSize) {
         override fun sizeOf(key: Long, bitmap: Bitmap): Int = bitmap.byteCount / 1024
     }
@@ -624,6 +648,20 @@ class MusicManager(private val context: Context) {
         applyChannelMixing()
         registerAudioDeviceCallback()
         updateDeviceRoutingAndHighlight()
+
+        AudioEffectsManager.onPlaybackSpeedChangeRequested = { speed, pitch ->
+            try {
+                playbackSpeed = speed
+                player.playbackParameters = PlaybackParameters(speed, pitch)
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                e.printStackTrace()
+            }
+        }
+
+        if (AudioEffectsManager.isLofiEnabled.value) {
+            player.playbackParameters = PlaybackParameters(0.83f, 0.88f)
+        }
 
         managerScope.launch(Dispatchers.IO) {
             loadInstantCacheAsync()
@@ -661,6 +699,7 @@ class MusicManager(private val context: Context) {
                 .setSessionActivity(pendingIntent)
                 .build()
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             e.printStackTrace()
         }
     }
@@ -684,6 +723,7 @@ class MusicManager(private val context: Context) {
         try {
             audioManager.registerAudioDeviceCallback(audioDeviceCallback, null)
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             e.printStackTrace()
         }
     }
@@ -711,6 +751,7 @@ class MusicManager(private val context: Context) {
                 context.registerReceiver(receiver, filter)
             }
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             e.printStackTrace()
         }
     }
@@ -825,6 +866,7 @@ class MusicManager(private val context: Context) {
             applyVolumeNormalization()
             applyChannelMixing()
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             e.printStackTrace()
         }
     }
@@ -847,6 +889,7 @@ class MusicManager(private val context: Context) {
             applyVolumeNormalization()
             applyChannelMixing()
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             e.printStackTrace()
         }
     }
@@ -1218,6 +1261,7 @@ class MusicManager(private val context: Context) {
                 }
             }
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             e.printStackTrace()
         }
     }
@@ -1449,15 +1493,17 @@ class MusicManager(private val context: Context) {
         } catch (_: Exception) {}
     }
 
+    // Instant Startup Cache Engine
     private suspend fun loadInstantCacheAsync() = withContext(Dispatchers.IO) {
-        val cachedJson = prefs.getString("cached_songs_catalog", null)
-        if (cachedJson == null) {
-            withContext(Dispatchers.Main.immediate) { isInitialLoading = false }
-            return@withContext
-        }
         try {
+            val cachedJson = prefs.getString("cached_songs_catalog", null)
+            if (cachedJson.isNullOrBlank()) {
+                withContext(Dispatchers.Main.immediate) { isInitialLoading = false }
+                return@withContext
+            }
+
             val arr = JSONArray(cachedJson)
-            val list = ArrayList<Song>()
+            val list = ArrayList<Song>(arr.length())
             for (i in 0 until arr.length()) {
                 val o = arr.getJSONObject(i)
                 list.add(
@@ -1486,18 +1532,29 @@ class MusicManager(private val context: Context) {
                 )
             }
             if (list.isNotEmpty()) {
+                ArtistDataManager.init(context)
+                val preParsedArtists = withContext(Dispatchers.Default) {
+                    ArtistParsingEngine.parseAndGroupArtists(list)
+                }
+
                 withContext(Dispatchers.Main.immediate) {
                     allSongs.clear()
                     allSongs.addAll(list)
                     rawStorageSongs.clear()
                     rawStorageSongs.addAll(list)
                     refreshHistory()
+                    parsedArtistsList.clear()
+                    parsedArtistsList.addAll(preParsedArtists)
                     isInitialLoading = false
                 }
             } else {
                 withContext(Dispatchers.Main.immediate) { isInitialLoading = false }
             }
-        } catch (_: Exception) {
+        } catch (e: Throwable) {
+            if (e is CancellationException) throw e
+            try {
+                prefs.edit().remove("cached_songs_catalog").apply()
+            } catch (_: Exception) {}
             withContext(Dispatchers.Main.immediate) { isInitialLoading = false }
         }
     }
@@ -1506,7 +1563,7 @@ class MusicManager(private val context: Context) {
         managerScope.launch(Dispatchers.IO) {
             try {
                 val arr = JSONArray()
-                songs.forEach { s ->
+                songs.take(100).forEach { s ->
                     val o = JSONObject().apply {
                         put("id", s.id)
                         put("title", s.title)
@@ -1530,7 +1587,21 @@ class MusicManager(private val context: Context) {
                     arr.put(o)
                 }
                 prefs.edit().putString("cached_songs_catalog", arr.toString()).apply()
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+            }
+        }
+    }
+
+    // Background Threaded Artist Sync
+    fun refreshArtistsInBackground() {
+        managerScope.launch(Dispatchers.Default) {
+            ArtistDataManager.init(context)
+            val parsed = ArtistParsingEngine.parseAndGroupArtists(allSongs)
+            withContext(Dispatchers.Main.immediate) {
+                parsedArtistsList.clear()
+                parsedArtistsList.addAll(parsed)
+            }
         }
     }
 
@@ -1539,7 +1610,7 @@ class MusicManager(private val context: Context) {
         isScanningStorage = true
 
         managerScope.launch(Dispatchers.IO) {
-            val songList = ArrayList<Song>()
+            val songList = ArrayList<Song>(4000)
             val collection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
             } else {
@@ -1639,6 +1710,7 @@ class MusicManager(private val context: Context) {
                     }
                 }
             } catch (e: Exception) {
+                if (e is CancellationException) throw e
                 e.printStackTrace()
             }
 
@@ -1646,6 +1718,7 @@ class MusicManager(private val context: Context) {
             val hiddenAudioSet = hiddenAudioIds.toHashSet()
             val visibleSongs = songList.filter { it.folderName !in hiddenFoldersSet && it.id !in hiddenAudioSet }
 
+            ArtistDataManager.init(context)
             val parsed = withContext(Dispatchers.Default) {
                 ArtistParsingEngine.parseAndGroupArtists(visibleSongs)
             }
@@ -1661,6 +1734,7 @@ class MusicManager(private val context: Context) {
                 isScanningStorage = false
                 isInitialLoading = false
             }
+
             persistSongsCache(visibleSongs)
         }
     }
@@ -1737,6 +1811,15 @@ class MusicManager(private val context: Context) {
             withContext(Dispatchers.Main.immediate) {
                 player.setMediaItems(mediaItems, targetIndex, initialPositionMs)
                 player.prepare()
+
+                if (AudioEffectsManager.isLofiEnabled.value) {
+                    playbackSpeed = 0.83f
+                    player.playbackParameters = PlaybackParameters(0.83f, 0.88f)
+                } else {
+                    playbackSpeed = 1.0f
+                    player.playbackParameters = PlaybackParameters(1.0f, 1.0f)
+                }
+
                 if (isFadeOnStart && !isCrossfadeEnabled) {
                     triggerFadeIn(1000L)
                 } else {
@@ -1750,13 +1833,27 @@ class MusicManager(private val context: Context) {
         }
     }
 
+    // Queue Item Moving: preserves uninterrupted playback and current track selection
     fun moveQueueItem(fromIndex: Int, toIndex: Int) {
         if (fromIndex in playbackQueue.indices && toIndex in playbackQueue.indices && fromIndex != toIndex) {
+            val currentActiveSong = currentSong
+            val isPlayingOriginal = player.isPlaying
+
             val moved = playbackQueue.removeAt(fromIndex)
             playbackQueue.add(toIndex, moved)
+
             try {
                 player.moveMediaItem(fromIndex, toIndex)
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+            }
+
+            if (currentActiveSong != null) {
+                currentSong = currentActiveSong
+                if (isPlayingOriginal && !player.isPlaying) {
+                    player.play()
+                }
+            }
         }
     }
 
@@ -1789,7 +1886,8 @@ class MusicManager(private val context: Context) {
         try {
             RingtoneManager.setActualDefaultRingtoneUri(context, RingtoneManager.TYPE_RINGTONE, song.uri)
             Toast.makeText(context, "Set as default ringtone!", Toast.LENGTH_SHORT).show()
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
             Toast.makeText(context, "Could not set ringtone", Toast.LENGTH_SHORT).show()
         }
     }
@@ -2062,22 +2160,26 @@ class MusicManager(private val context: Context) {
 
     fun savePlaylists() {
         managerScope.launch(Dispatchers.IO) {
-            val arr = JSONArray()
-            for (pl in customPlaylists) {
-                val obj = JSONObject().apply {
-                    put("id", pl.id)
-                    put("name", pl.name)
-                    put("isFolder", pl.isFolderPinned)
-                    put("folderName", pl.folderName ?: "")
-                    put("icon", pl.icon)
-                    put("iconColorHex", pl.iconColorHex)
-                    val idsArr = JSONArray()
-                    pl.songIds.forEach { idsArr.put(it) }
-                    put("songIds", idsArr)
+            try {
+                val arr = JSONArray()
+                for (pl in customPlaylists) {
+                    val obj = JSONObject().apply {
+                        put("id", pl.id)
+                        put("name", pl.name)
+                        put("isFolder", pl.isFolderPinned)
+                        put("folderName", pl.folderName ?: "")
+                        put("icon", pl.icon)
+                        put("iconColorHex", pl.iconColorHex)
+                        val idsArr = JSONArray()
+                        pl.songIds.forEach { idsArr.put(it) }
+                        put("songIds", idsArr)
+                    }
+                    arr.put(obj)
                 }
-                arr.put(obj)
+                prefs.edit().putString("custom_playlists", arr.toString()).apply()
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
             }
-            prefs.edit().putString("custom_playlists", arr.toString()).apply()
         }
     }
 
@@ -2105,12 +2207,16 @@ class MusicManager(private val context: Context) {
                 )
                 val intentSenderRequest = IntentSenderRequest.Builder(writePendingIntent.intentSender).build()
                 val act = attachedActivity
-                if (act != null) {
-                    act.writeRequestLauncher.launch(intentSenderRequest)
+                val launcher = writeRequestLauncher
+                if (launcher != null) {
+                    launcher.launch(intentSenderRequest)
+                } else if (act != null) {
+                    executePendingStorageWrite()
                 } else {
                     executePendingStorageWrite()
                 }
             } catch (e: Exception) {
+                if (e is CancellationException) throw e
                 e.printStackTrace()
                 executePendingStorageWrite()
             }
@@ -2144,6 +2250,7 @@ class MusicManager(private val context: Context) {
                     if (bmp != null) memoryCache.put(task.song.id, bmp)
                     prefs.edit().putString("custom_cover_${task.song.id}", targetFile.absolutePath).apply()
                 } catch (e: Exception) {
+                    if (e is CancellationException) throw e
                     e.printStackTrace()
                 }
             }
@@ -2195,6 +2302,7 @@ class MusicManager(private val context: Context) {
                     fileUpdatedOnDisk = true
                 }
             } catch (e: Exception) {
+                if (e is CancellationException) throw e
                 e.printStackTrace()
             }
 
@@ -2211,6 +2319,7 @@ class MusicManager(private val context: Context) {
                     }
                 }
             } catch (e: Exception) {
+                if (e is CancellationException) throw e
                 e.printStackTrace()
             }
 
@@ -2232,6 +2341,7 @@ class MusicManager(private val context: Context) {
                 context.contentResolver.update(task.song.uri, cv, null, null)
                 MediaScannerConnection.scanFile(context, arrayOf(finalPath), null, null)
             } catch (e: Exception) {
+                if (e is CancellationException) throw e
                 e.printStackTrace()
             }
 
@@ -2267,13 +2377,7 @@ class MusicManager(private val context: Context) {
                 ).show()
             }
 
-            val parsed = withContext(Dispatchers.Default) {
-                ArtistParsingEngine.parseAndGroupArtists(allSongs)
-            }
-            withContext(Dispatchers.Main.immediate) {
-                parsedArtistsList.clear()
-                parsedArtistsList.addAll(parsed)
-            }
+            refreshArtistsInBackground()
         }
     }
 
@@ -2357,7 +2461,9 @@ class MusicManager(private val context: Context) {
                     outputStream.close()
                     profileImagePath = targetFile.absolutePath
                     prefs.edit().putString("prof_image_path", targetFile.absolutePath).apply()
-                } catch (_: Exception) {}
+                } catch (e: Exception) {
+                    if (e is CancellationException) throw e
+                }
             }
         }
     }
@@ -2392,7 +2498,9 @@ class MusicManager(private val context: Context) {
             try {
                 val arr = JSONArray(str)
                 for (i in 0 until arr.length()) userSavedColorPresets.add(Color(arr.getInt(i)))
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+            }
         }
         if (userSavedColorPresets.isEmpty()) {
             listOf(
@@ -2445,76 +2553,123 @@ class MusicManager(private val context: Context) {
             playbackQueue.removeAll { it.id == song.id }
             historySongs.removeAll { it.id == song.id }
 
-            managerScope.launch(Dispatchers.Default) {
-                val parsed = ArtistParsingEngine.parseAndGroupArtists(allSongs)
-                withContext(Dispatchers.Main.immediate) {
-                    parsedArtistsList.clear()
-                    parsedArtistsList.addAll(parsed)
-                }
-            }
+            refreshArtistsInBackground()
             true
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
             false
         }
     }
 
     fun getCachedAlbumArt(songId: Long): Bitmap? = memoryCache.get(songId)
 
+    fun getAlbumArtUri(song: Song): Uri? {
+        if (song.customCoverPath != null && File(song.customCoverPath).exists()) {
+            return Uri.fromFile(File(song.customCoverPath))
+        }
+        return song.uri
+    }
+
+    // ⚡ Ultra-Fast Hardware-Safe Track-Exclusive Artwork Decoder (Zero Frame Drops on 120Hz)
     suspend fun loadAlbumArtAsync(song: Song): Bitmap? = withContext(Dispatchers.IO) {
         val cached = memoryCache.get(song.id)
         if (cached != null) return@withContext cached
 
         var resultBitmap: Bitmap? = null
+        val targetSizePx = 256
 
-        // 1. Check for manual/custom edited cover first
+        // 1. User-custom cover check
         if (song.customCoverPath != null) {
             val file = File(song.customCoverPath)
             if (file.exists()) {
-                val opts = BitmapFactory.Options().apply {
-                    inJustDecodeBounds = true
-                    BitmapFactory.decodeFile(file.absolutePath, this)
-                    inSampleSize = calculateInSampleSize(this, 256, 256)
-                    inJustDecodeBounds = false
-                    inPreferredConfig = Bitmap.Config.RGB_565
+                try {
+                    val boundsOpts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                    BitmapFactory.decodeFile(file.absolutePath, boundsOpts)
+
+                    var inSample = 1
+                    while ((boundsOpts.outWidth / (inSample * 2)) >= targetSizePx &&
+                        (boundsOpts.outHeight / (inSample * 2)) >= targetSizePx
+                    ) {
+                        inSample *= 2
+                    }
+
+                    val decodeOpts = BitmapFactory.Options().apply {
+                        inSampleSize = inSample.coerceAtLeast(1)
+                        inPreferredConfig = Bitmap.Config.RGB_565
+                        inDither = true
+                    }
+                    resultBitmap = BitmapFactory.decodeFile(file.absolutePath, decodeOpts)
+                } catch (e: Exception) {
+                    if (e is CancellationException) throw e
                 }
-                resultBitmap = BitmapFactory.decodeFile(file.absolutePath, opts)
             }
         }
 
-        // 2. Direct embedded cover extraction from the file's own ID3/MP4/FLAC metadata
-        //    (Prevents Android MediaStore from applying the same album art to every track sharing a generic album ID)
+        // 2. Direct embedded ID3 tag extraction from song file bytes
         if (resultBitmap == null) {
+            var retriever: MediaMetadataRetriever? = null
             try {
-                val retriever = MediaMetadataRetriever()
+                retriever = MediaMetadataRetriever()
                 retriever.setDataSource(context, song.uri)
-                val artBytes = retriever.embeddedPicture
-                if (artBytes != null) {
-                    val opts = BitmapFactory.Options().apply {
-                        inJustDecodeBounds = true
-                        BitmapFactory.decodeByteArray(artBytes, 0, artBytes.size, this)
-                        inSampleSize = calculateInSampleSize(this, 256, 256)
-                        inJustDecodeBounds = false
-                        inPreferredConfig = Bitmap.Config.RGB_565
+                val rawBytes = retriever.embeddedPicture
+                if (rawBytes != null && rawBytes.isNotEmpty()) {
+                    val boundsOpts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                    BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size, boundsOpts)
+
+                    var inSample = 1
+                    while ((boundsOpts.outWidth / (inSample * 2)) >= targetSizePx &&
+                        (boundsOpts.outHeight / (inSample * 2)) >= targetSizePx
+                    ) {
+                        inSample *= 2
                     }
-                    resultBitmap = BitmapFactory.decodeByteArray(artBytes, 0, artBytes.size, opts)
+
+                    val decodeOpts = BitmapFactory.Options().apply {
+                        inSampleSize = inSample.coerceAtLeast(1)
+                        inPreferredConfig = Bitmap.Config.RGB_565
+                        inDither = true
+                    }
+                    resultBitmap = BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size, decodeOpts)
                 }
-                retriever.release()
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+            } finally {
+                try { retriever?.release() } catch (_: Exception) {}
+            }
         }
 
-        // 3. Fallback to MediaStore album art URI only if the file has no embedded picture
-        if (resultBitmap == null && song.albumId > 0L) {
-            try {
-                val sArtworkUri = Uri.parse("content://media/external/audio/albumart")
-                val uri = ContentUris.withAppendedId(sArtworkUri, song.albumId)
-                context.contentResolver.openInputStream(uri)?.use { stream ->
-                    val opts = BitmapFactory.Options().apply {
-                        inSampleSize = 2
-                        inPreferredConfig = Bitmap.Config.RGB_565
+        // 3. Direct file path fallback if URI read was restricted
+        if (resultBitmap == null && song.path.isNotBlank()) {
+            val localFile = File(song.path)
+            if (localFile.exists() && localFile.canRead()) {
+                var retriever: MediaMetadataRetriever? = null
+                try {
+                    retriever = MediaMetadataRetriever()
+                    retriever.setDataSource(localFile.absolutePath)
+                    val rawBytes = retriever.embeddedPicture
+                    if (rawBytes != null && rawBytes.isNotEmpty()) {
+                        val boundsOpts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                        BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size, boundsOpts)
+
+                        var inSample = 1
+                        while ((boundsOpts.outWidth / (inSample * 2)) >= targetSizePx &&
+                            (boundsOpts.outHeight / (inSample * 2)) >= targetSizePx
+                        ) {
+                            inSample *= 2
+                        }
+
+                        val decodeOpts = BitmapFactory.Options().apply {
+                            inSampleSize = inSample.coerceAtLeast(1)
+                            inPreferredConfig = Bitmap.Config.RGB_565
+                            inDither = true
+                        }
+                        resultBitmap = BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size, decodeOpts)
                     }
-                    resultBitmap = BitmapFactory.decodeStream(stream, null, opts)
+                } catch (e: Exception) {
+                    if (e is CancellationException) throw e
+                } finally {
+                    try { retriever?.release() } catch (_: Exception) {}
                 }
-            } catch (_: Exception) {}
+            }
         }
 
         val finalBmp = resultBitmap
@@ -2525,19 +2680,6 @@ class MusicManager(private val context: Context) {
         null
     }
 
-    private fun calculateInSampleSize(options: BitmapFactory.Options, reqWidth: Int, reqHeight: Int): Int {
-        val (height: Int, width: Int) = options.outHeight to options.outWidth
-        var inSampleSize = 1
-        if (height > reqHeight || width > reqWidth) {
-            val halfHeight: Int = height / 2
-            val halfWidth: Int = width / 2
-            while (halfHeight / inSampleSize >= reqHeight && halfWidth / inSampleSize >= reqWidth) {
-                inSampleSize *= 2
-            }
-        }
-        return inSampleSize
-    }
-
     fun updateNotification() {
         val song = currentSong ?: return
         val session = mediaSession ?: return
@@ -2546,7 +2688,9 @@ class MusicManager(private val context: Context) {
         try {
             val serviceIntent = Intent(context, MediaPlaybackService::class.java)
             ContextCompat.startForegroundService(context, serviceIntent)
-        } catch (_: Exception) {}
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+        }
 
         val launchIntent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -2598,6 +2742,7 @@ class MusicManager(private val context: Context) {
         try {
             notificationManager.notify(MediaPlaybackService.NOTIF_ID, builder.build())
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             e.printStackTrace()
         }
     }
@@ -2640,7 +2785,9 @@ class MusicManager(private val context: Context) {
                         )
                     )
                 }
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+            }
         }
     }
 }

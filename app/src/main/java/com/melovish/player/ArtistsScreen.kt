@@ -12,9 +12,12 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
@@ -39,7 +42,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -61,8 +66,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
@@ -105,8 +108,11 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.media3.common.util.UnstableApi
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import coil.size.Precision
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.toImmutableList
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -116,7 +122,10 @@ import java.io.File
 import java.io.FileOutputStream
 import java.util.Locale
 
-// Thread-Safe Artist Customization & Persistence Engine
+// =========================================================================
+// 📌 THREAD-SAFE ARTIST CUSTOMIZATION & PERSISTENCE ENGINE
+// =========================================================================
+
 object ArtistDataManager {
     private const val PREFS_NAME = "melovish_artists_prefs_v12"
     private var prefs: SharedPreferences? = null
@@ -132,8 +141,9 @@ object ArtistDataManager {
     var refreshTrigger by mutableIntStateOf(0)
 
     fun init(context: Context) {
-        if (prefs != null) return
-        prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        if (prefs == null) {
+            prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        }
         loadData()
     }
 
@@ -151,7 +161,9 @@ object ArtistDataManager {
             try {
                 val obj = JSONObject(aliasJson)
                 obj.keys().forEach { artistAliases[it] = obj.getString(it) }
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+            }
         }
 
         manuallyCreatedArtists.clear()
@@ -162,7 +174,9 @@ object ArtistDataManager {
                 for (i in 0 until arr.length()) {
                     manuallyCreatedArtists.add(arr.getString(i))
                 }
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+            }
         }
 
         removedSongMap.clear()
@@ -176,7 +190,9 @@ object ArtistDataManager {
                     for (i in 0 until arr.length()) list.add(arr.getLong(i))
                     removedSongMap[key] = list
                 }
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+            }
         }
 
         movedSongMap.clear()
@@ -190,7 +206,9 @@ object ArtistDataManager {
                     for (i in 0 until arr.length()) list.add(arr.getLong(i))
                     movedSongMap[key] = list
                 }
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+            }
         }
 
         customArtistImages.clear()
@@ -199,46 +217,52 @@ object ArtistDataManager {
             try {
                 val obj = JSONObject(imgJson)
                 obj.keys().forEach { customArtistImages[it] = obj.getString(it) }
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+            }
         }
     }
 
-    private fun saveData() {
+    fun saveData() {
         val p = prefs ?: return
-        val aliasObj = JSONObject()
-        artistAliases.forEach { (k, v) -> aliasObj.put(k, v) }
+        try {
+            val aliasObj = JSONObject()
+            artistAliases.forEach { (k, v) -> aliasObj.put(k, v) }
 
-        val customArr = JSONArray()
-        manuallyCreatedArtists.forEach { customArr.put(it) }
+            val customArr = JSONArray()
+            manuallyCreatedArtists.forEach { customArr.put(it) }
 
-        val remObj = JSONObject()
-        removedSongMap.forEach { (k, v) ->
-            val arr = JSONArray()
-            v.forEach { arr.put(it) }
-            remObj.put(k, arr)
+            val remObj = JSONObject()
+            removedSongMap.forEach { (k, v) ->
+                val arr = JSONArray()
+                v.forEach { arr.put(it) }
+                remObj.put(k, arr)
+            }
+
+            val movObj = JSONObject()
+            movedSongMap.forEach { (k, v) ->
+                val arr = JSONArray()
+                v.forEach { arr.put(it) }
+                movObj.put(k, arr)
+            }
+
+            val imgObj = JSONObject()
+            customArtistImages.forEach { (k, v) -> imgObj.put(k, v) }
+
+            p.edit()
+                .putStringSet("hidden_artists", hiddenArtists.toSet())
+                .putStringSet("pinned_artists", pinnedArtists.toSet())
+                .putString("artist_aliases", aliasObj.toString())
+                .putString("custom_artists", customArr.toString())
+                .putString("removed_songs_map", remObj.toString())
+                .putString("moved_songs_map", movObj.toString())
+                .putString("custom_artist_images", imgObj.toString())
+                .apply()
+
+            refreshTrigger++
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
         }
-
-        val movObj = JSONObject()
-        movedSongMap.forEach { (k, v) ->
-            val arr = JSONArray()
-            v.forEach { arr.put(it) }
-            movObj.put(k, arr)
-        }
-
-        val imgObj = JSONObject()
-        customArtistImages.forEach { (k, v) -> imgObj.put(k, v) }
-
-        p.edit()
-            .putStringSet("hidden_artists", hiddenArtists.toSet())
-            .putStringSet("pinned_artists", pinnedArtists.toSet())
-            .putString("artist_aliases", aliasObj.toString())
-            .putString("custom_artists", customArr.toString())
-            .putString("removed_songs_map", remObj.toString())
-            .putString("moved_songs_map", movObj.toString())
-            .putString("custom_artist_images", imgObj.toString())
-            .apply()
-
-        refreshTrigger++
     }
 
     fun togglePinArtist(name: String) {
@@ -274,7 +298,9 @@ object ArtistDataManager {
             output.close()
             customArtistImages[artistName] = targetFile.absolutePath
             saveData()
-        } catch (_: Exception) {}
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+        }
     }
 
     fun createNewArtist(name: String, initialSongs: List<Song> = emptyList()) {
@@ -305,9 +331,21 @@ object ArtistDataManager {
         }
         saveData()
     }
+
+    fun addSongToArtist(artistName: String, songId: Long) {
+        removedSongMap[artistName]?.remove(songId)
+        val list = movedSongMap.getOrPut(artistName) { mutableListOf() }
+        if (!list.contains(songId)) {
+            list.add(songId)
+        }
+        saveData()
+    }
 }
 
-// Regex-Optimized Canonical Artist Parsing Engine
+// =========================================================================
+// 📌 REGEX-OPTIMIZED CANONICAL ARTIST PARSING ENGINE
+// =========================================================================
+
 object ArtistParsingEngine {
     private val splitRegex = Regex("""\s*(?:,|/|&|\bfeat\.|\bft\.|\bfeaturing\b)\s*""", RegexOption.IGNORE_CASE)
     private val promoWebsitesRegex = Regex(
@@ -329,8 +367,6 @@ object ArtistParsingEngine {
     }
 
     fun parseAndGroupArtists(allSongs: List<Song>): List<ArtistItem> {
-        if (allSongs.isEmpty()) return emptyList()
-
         val intermediateMap = LinkedHashMap<String, ArrayList<Song>>()
 
         for (song in allSongs) {
@@ -399,9 +435,14 @@ object ArtistParsingEngine {
         }
 
         ArtistDataManager.manuallyCreatedArtists.forEach { customName ->
-            if (!userMergedMap.containsKey(customName)) {
-                userMergedMap[customName] = ArrayList()
-                userMergedIds[customName] = HashSet()
+            var target = customName
+            val visited = HashSet<String>()
+            while (aliasSnapshot.containsKey(target) && visited.add(target)) {
+                target = aliasSnapshot[target] ?: target
+            }
+            if (!userMergedMap.containsKey(target)) {
+                userMergedMap[target] = ArrayList()
+                userMergedIds[target] = HashSet()
             }
         }
 
@@ -432,7 +473,8 @@ object ArtistParsingEngine {
                     }
                 }
 
-                if (distinctSongs.isNotEmpty() || ArtistDataManager.manuallyCreatedArtists.any { it.equals(name, ignoreCase = true) }) {
+                val isCustomCreated = ArtistDataManager.manuallyCreatedArtists.any { it.equals(name, ignoreCase = true) }
+                if (distinctSongs.isNotEmpty() || isCustomCreated) {
                     val isPinned = pinnedSet.contains(name)
                     finalResult.add(
                         ArtistItem(
@@ -449,7 +491,10 @@ object ArtistParsingEngine {
     }
 }
 
-// Root Artist Action Modal
+// =========================================================================
+// 📌 ROOT ARTIST ACTION MODAL
+// =========================================================================
+
 @UnstableApi
 @Composable
 fun RootArtistActionModal(
@@ -472,16 +517,14 @@ fun RootArtistActionModal(
     }
 
     val dialogSurface = manager.getCurrentDialogColor()
-    val glassBorder = manager.getGlassBorderBrush()
+    val glassBorderBrush = manager.getGlassBorderBrush()
 
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         if (uri != null && artistForCustomImage != null) {
             ArtistDataManager.setArtistCustomImage(context, artistForCustomImage!!.name, uri)
-            val updated = ArtistParsingEngine.parseAndGroupArtists(manager.allSongs)
-            manager.parsedArtistsList.clear()
-            manager.parsedArtistsList.addAll(updated)
+            manager.refreshArtistsInBackground()
             Toast.makeText(context, "Artist image updated!", Toast.LENGTH_SHORT).show()
         }
         artistForCustomImage = null
@@ -497,6 +540,7 @@ fun RootArtistActionModal(
         Box(
             modifier = Modifier
                 .fillMaxSize()
+                .zIndex(999f)
                 .background(Color(0x77000000))
                 .nestedScroll(modalScrollInterceptor)
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
@@ -507,10 +551,11 @@ fun RootArtistActionModal(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(550.dp)
+                    .fillMaxHeight(0.85f)
+                    .imePadding()
                     .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
                     .background(dialogSurface)
-                    .border(1.5.dp, glassBorder, RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
+                    .border(1.5.dp, glassBorderBrush, RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
                     .clickable(enabled = false) {}
                     .padding(20.dp)
             ) {
@@ -548,9 +593,7 @@ fun RootArtistActionModal(
                                     .background(if (manager.isDarkMode) Color(0x1AFFFFFF) else Color(0xFFF1F5F9))
                                     .clickable {
                                         ArtistDataManager.mergeArtists(src.name, targetArtist.name)
-                                        val updated = ArtistParsingEngine.parseAndGroupArtists(manager.allSongs)
-                                        manager.parsedArtistsList.clear()
-                                        manager.parsedArtistsList.addAll(updated)
+                                        manager.refreshArtistsInBackground()
                                         Toast.makeText(context, "Merged into ${targetArtist.name}", Toast.LENGTH_SHORT).show()
                                         onDismiss()
                                     }
@@ -582,6 +625,7 @@ fun RootArtistActionModal(
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .zIndex(999f)
             .background(Color(0x77000000))
             .nestedScroll(modalScrollInterceptor)
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
@@ -594,7 +638,7 @@ fun RootArtistActionModal(
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
                 .background(dialogSurface)
-                .border(1.5.dp, glassBorder, RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
+                .border(1.5.dp, glassBorderBrush, RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
                 .clickable(enabled = false) {}
                 .padding(22.dp)
         ) {
@@ -608,9 +652,7 @@ fun RootArtistActionModal(
                         .clip(RoundedCornerShape(12.dp))
                         .clickable {
                             ArtistDataManager.togglePinArtist(artist.name)
-                            val updated = ArtistParsingEngine.parseAndGroupArtists(manager.allSongs)
-                            manager.parsedArtistsList.clear()
-                            manager.parsedArtistsList.addAll(updated)
+                            manager.refreshArtistsInBackground()
                             onDismiss()
                         }
                         .padding(12.dp),
@@ -674,9 +716,7 @@ fun RootArtistActionModal(
                         .clip(RoundedCornerShape(12.dp))
                         .clickable {
                             ArtistDataManager.hideArtist(artist.name)
-                            val updated = ArtistParsingEngine.parseAndGroupArtists(manager.allSongs)
-                            manager.parsedArtistsList.clear()
-                            manager.parsedArtistsList.addAll(updated)
+                            manager.refreshArtistsInBackground()
                             onDismiss()
                         }
                         .padding(12.dp),
@@ -701,7 +741,10 @@ fun RootArtistActionModal(
     }
 }
 
-// 1:1 Dynamic Square Artist Card
+// =========================================================================
+// 📌 1:1 DYNAMIC SQUARE ARTIST CARD
+// =========================================================================
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ArtistSquareCard(
@@ -857,7 +900,7 @@ fun ArtistSquareCard(
 }
 
 // =========================================================================
-// 📌 ARTISTS SCREEN
+// 📌 ARTISTS SCREEN (Pre-Parsed Background Cache with 0ms Tab Switching)
 // =========================================================================
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -866,13 +909,19 @@ fun ArtistSquareCard(
 fun ArtistsScreen(
     manager: MusicManager,
     listState: LazyListState,
+    gridState: LazyGridState = rememberLazyGridState(),
     onArtistClick: (ArtistItem) -> Unit,
     onArtistLongClick: (ArtistItem) -> Unit,
     onOpenCreateArtist: () -> Unit = {},
     onOpenGridSizeDialog: () -> Unit = {}
 ) {
     val context = LocalContext.current
-    remember { ArtistDataManager.init(context) }
+    LaunchedEffect(Unit) {
+        ArtistDataManager.init(context)
+        if (manager.parsedArtistsList.isEmpty() && manager.allSongs.isNotEmpty()) {
+            manager.refreshArtistsInBackground()
+        }
+    }
 
     val textColor = manager.getCurrentTextColor()
     val cardBg = manager.getCurrentSurfaceColor()
@@ -881,17 +930,12 @@ fun ArtistsScreen(
     val coroutineScope = rememberCoroutineScope()
 
     var query by remember { mutableStateOf("") }
+    var isSearchFieldVisible by remember { mutableStateOf(false) }
     var showSortMenu by remember { mutableStateOf(false) }
 
-    val artistsList = if (manager.parsedArtistsList.isNotEmpty()) {
-        manager.parsedArtistsList
-    } else {
-        remember(manager.allSongs.size, ArtistDataManager.refreshTrigger) {
-            ArtistParsingEngine.parseAndGroupArtists(manager.allSongs)
-        }
-    }
+    val artistsList = manager.parsedArtistsList
 
-    val sortedArtists: ImmutableList<ArtistItem> = remember(artistsList, query, manager.artistsSortOrder, ArtistDataManager.refreshTrigger) {
+    val sortedArtists: ImmutableList<ArtistItem> = remember(artistsList.size, artistsList.toList(), query, manager.artistsSortOrder, ArtistDataManager.refreshTrigger) {
         val filtered = if (query.isBlank()) artistsList
         else artistsList.filter { it.name.contains(query, ignoreCase = true) }
 
@@ -915,8 +959,32 @@ fun ArtistsScreen(
         (pinned + unpinned).toImmutableList()
     }
 
+    // O(1) Precomputed alphabet jump map
     val alphabet = remember { listOf('#') + ('A'..'Z').toList() }
+    val alphabetIndexMap = remember(sortedArtists) {
+        val map = HashMap<Char, Int>()
+        sortedArtists.forEachIndexed { index, artist ->
+            val firstChar = artist.name.firstOrNull()?.uppercaseChar() ?: '#'
+            val key = if (firstChar in 'A'..'Z') firstChar else '#'
+            if (!map.containsKey(key)) {
+                map[key] = index
+            }
+        }
+        map
+    }
+
     var activeBubbleChar by remember { mutableStateOf<Char?>(null) }
+
+    var previousSortOrder by remember { mutableStateOf(manager.artistsSortOrder) }
+    LaunchedEffect(manager.artistsSortOrder) {
+        if (manager.artistsSortOrder != previousSortOrder) {
+            previousSortOrder = manager.artistsSortOrder
+            coroutineScope.launch {
+                try { listState.scrollToItem(0) } catch (_: Exception) {}
+                try { gridState.scrollToItem(0) } catch (_: Exception) {}
+            }
+        }
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
@@ -935,6 +1003,27 @@ fun ArtistsScreen(
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(CircleShape)
+                            .background(if (isSearchFieldVisible || query.isNotEmpty()) accentColor.copy(alpha = 0.22f) else cardBg)
+                            .border(
+                                1.2.dp,
+                                if (isSearchFieldVisible || query.isNotEmpty()) accentColor else Color.White.copy(alpha = 0.25f),
+                                CircleShape
+                            )
+                            .clickable {
+                                isSearchFieldVisible = !isSearchFieldVisible
+                                if (!isSearchFieldVisible) query = ""
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(text = "🔍", fontSize = 16.sp)
+                    }
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
                     Box(
                         modifier = Modifier
                             .size(38.dp)
@@ -965,23 +1054,27 @@ fun ArtistsScreen(
                             SortListVector(tint = accentColor, modifier = Modifier.size(19.dp))
                         }
 
-                        DropdownMenu(expanded = showSortMenu, onDismissRequest = { showSortMenu = false }) {
-                            DropdownMenuItem(text = { Text("Name (A to Z)") }, onClick = {
-                                manager.setPersistentArtistsSort(ArtistSortOrder.NAME_A_TO_Z)
-                                showSortMenu = false
-                            })
-                            DropdownMenuItem(text = { Text("Name (Z to A)") }, onClick = {
-                                manager.setPersistentArtistsSort(ArtistSortOrder.NAME_Z_TO_A)
-                                showSortMenu = false
-                            })
-                            DropdownMenuItem(text = { Text("Most Tracks") }, onClick = {
-                                manager.setPersistentArtistsSort(ArtistSortOrder.MOST_TRACKS)
-                                showSortMenu = false
-                            })
-                            DropdownMenuItem(text = { Text("Fewest Tracks") }, onClick = {
-                                manager.setPersistentArtistsSort(ArtistSortOrder.FEWEST_TRACKS)
-                                showSortMenu = false
-                            })
+                        GlassmorphicDropdownMenu(
+                            expanded = showSortMenu,
+                            onDismissRequest = { showSortMenu = false },
+                            manager = manager
+                        ) {
+                            listOf(
+                                Pair("Name (A to Z)", ArtistSortOrder.NAME_A_TO_Z),
+                                Pair("Name (Z to A)", ArtistSortOrder.NAME_Z_TO_A),
+                                Pair("Most Tracks", ArtistSortOrder.MOST_TRACKS),
+                                Pair("Fewest Tracks", ArtistSortOrder.FEWEST_TRACKS)
+                            ).forEach { (label, order) ->
+                                GlassDropdownMenuItem(
+                                    text = label,
+                                    isSelected = manager.artistsSortOrder == order,
+                                    manager = manager,
+                                    onClick = {
+                                        manager.setPersistentArtistsSort(order)
+                                        showSortMenu = false
+                                    }
+                                )
+                            }
                         }
                     }
 
@@ -997,27 +1090,47 @@ fun ArtistsScreen(
                 }
             }
 
+            AnimatedVisibility(
+                visible = isSearchFieldVisible,
+                enter = expandVertically(animationSpec = spring(stiffness = 550f)) + fadeIn(tween(180)),
+                exit = shrinkVertically(animationSpec = spring(stiffness = 550f)) + fadeOut(tween(140))
+            ) {
+                Column {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = query,
+                        onValueChange = { query = it },
+                        placeholder = { Text("Search artists...", color = Color(0xFF64748B)) },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = textColor,
+                            unfocusedTextColor = textColor,
+                            focusedContainerColor = cardBg,
+                            unfocusedContainerColor = cardBg,
+                            focusedBorderColor = accentColor,
+                            unfocusedBorderColor = manager.getCurrentBorderColor(),
+                            cursorColor = accentColor
+                        ),
+                        trailingIcon = {
+                            if (query.isNotEmpty()) {
+                                Text(
+                                    text = "✕",
+                                    color = Color(0xFF64748B),
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier
+                                        .clickable { query = "" }
+                                        .padding(8.dp)
+                                )
+                            }
+                        },
+                        singleLine = true
+                    )
+                }
+            }
+
             Spacer(modifier = Modifier.height(10.dp))
-
-            OutlinedTextField(
-                value = query,
-                onValueChange = { query = it },
-                placeholder = { Text("Search artists...", color = Color(0xFF64748B)) },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = textColor,
-                    unfocusedTextColor = textColor,
-                    focusedContainerColor = cardBg,
-                    unfocusedContainerColor = cardBg,
-                    focusedBorderColor = accentColor,
-                    unfocusedBorderColor = manager.getCurrentBorderColor(),
-                    cursorColor = accentColor
-                ),
-                singleLine = true
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
 
             if (sortedArtists.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -1039,6 +1152,17 @@ fun ArtistsScreen(
                                     contentType = { "artist_list_row" }
                                 ) { artist ->
                                     val customImg = ArtistDataManager.customArtistImages[artist.name]
+                                    val firstSong = artist.songs.firstOrNull()
+                                    var albumArtBitmap by remember(firstSong?.id, customImg) {
+                                        mutableStateOf(if (customImg == null && firstSong != null) manager.getCachedAlbumArt(firstSong.id) else null)
+                                    }
+
+                                    LaunchedEffect(firstSong?.id, customImg) {
+                                        if (customImg == null && firstSong != null && albumArtBitmap == null) {
+                                            albumArtBitmap = manager.loadAlbumArtAsync(firstSong)
+                                        }
+                                    }
+
                                     Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
@@ -1071,8 +1195,15 @@ fun ArtistsScreen(
                                                     contentScale = ContentScale.Crop,
                                                     modifier = Modifier.fillMaxSize()
                                                 )
+                                            } else if (albumArtBitmap != null) {
+                                                Image(
+                                                    bitmap = albumArtBitmap!!.asImageBitmap(),
+                                                    contentDescription = artist.name,
+                                                    contentScale = ContentScale.Crop,
+                                                    modifier = Modifier.fillMaxSize()
+                                                )
                                             } else {
-                                                Text("🎙", fontSize = 20.sp)
+                                                Text("🎙️", fontSize = 20.sp)
                                             }
                                         }
                                         Spacer(modifier = Modifier.width(14.dp))
@@ -1093,6 +1224,7 @@ fun ArtistsScreen(
                         }
                         GridViewMode.GRID_2 -> {
                             LazyVerticalGrid(
+                                state = gridState,
                                 columns = GridCells.Fixed(2),
                                 contentPadding = PaddingValues(bottom = 80.dp),
                                 horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -1122,6 +1254,7 @@ fun ArtistsScreen(
                         }
                         GridViewMode.GRID_3 -> {
                             LazyVerticalGrid(
+                                state = gridState,
                                 columns = GridCells.Fixed(3),
                                 contentPadding = PaddingValues(bottom = 80.dp),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -1151,6 +1284,7 @@ fun ArtistsScreen(
                         }
                         GridViewMode.GRID_4 -> {
                             LazyVerticalGrid(
+                                state = gridState,
                                 columns = GridCells.Fixed(4),
                                 contentPadding = PaddingValues(bottom = 80.dp),
                                 horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -1180,6 +1314,7 @@ fun ArtistsScreen(
                         }
                         GridViewMode.HERO_GRID -> {
                             LazyVerticalGrid(
+                                state = gridState,
                                 columns = GridCells.Fixed(2),
                                 contentPadding = PaddingValues(bottom = 80.dp),
                                 horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -1209,25 +1344,22 @@ fun ArtistsScreen(
                         }
                     }
 
-                    // Alphabet Fast-Scroll Bar
                     Column(
                         modifier = Modifier
                             .align(Alignment.CenterEnd)
                             .padding(bottom = 80.dp)
-                            .pointerInput(sortedArtists) {
+                            .pointerInput(alphabetIndexMap) {
                                 detectVerticalDragGestures(
                                     onDragStart = { offset ->
                                         val total = alphabet.size
                                         val index = ((offset.y / size.height) * total).toInt().coerceIn(0, total - 1)
                                         val char = alphabet[index]
                                         activeBubbleChar = char
-                                        val targetIndex = if (char == '#') {
-                                            sortedArtists.indexOfFirst { it.name.isNotEmpty() && !it.name.first().isLetter() }
-                                        } else {
-                                            sortedArtists.indexOfFirst { it.name.startsWith(char, ignoreCase = true) }
-                                        }
-                                        if (targetIndex != -1) {
-                                            coroutineScope.launch { listState.scrollToItem(targetIndex) }
+                                        alphabetIndexMap[char]?.let { targetIndex ->
+                                            coroutineScope.launch {
+                                                listState.scrollToItem(targetIndex)
+                                                gridState.scrollToItem(targetIndex)
+                                            }
                                         }
                                     },
                                     onDragEnd = { activeBubbleChar = null },
@@ -1237,13 +1369,11 @@ fun ArtistsScreen(
                                         val index = ((change.position.y / size.height) * total).toInt().coerceIn(0, total - 1)
                                         val char = alphabet[index]
                                         activeBubbleChar = char
-                                        val targetIndex = if (char == '#') {
-                                            sortedArtists.indexOfFirst { it.name.isNotEmpty() && !it.name.first().isLetter() }
-                                        } else {
-                                            sortedArtists.indexOfFirst { it.name.startsWith(char, ignoreCase = true) }
-                                        }
-                                        if (targetIndex != -1) {
-                                            coroutineScope.launch { listState.scrollToItem(targetIndex) }
+                                        alphabetIndexMap[char]?.let { targetIndex ->
+                                            coroutineScope.launch {
+                                                listState.scrollToItem(targetIndex)
+                                                gridState.scrollToItem(targetIndex)
+                                            }
                                         }
                                     }
                                 )
@@ -1260,13 +1390,11 @@ fun ArtistsScreen(
                                 modifier = Modifier
                                     .clip(CircleShape)
                                     .clickable {
-                                        val targetIndex = if (char == '#') {
-                                            sortedArtists.indexOfFirst { it.name.isNotEmpty() && !it.name.first().isLetter() }
-                                        } else {
-                                            sortedArtists.indexOfFirst { it.name.startsWith(char, ignoreCase = true) }
-                                        }
-                                        if (targetIndex != -1) {
-                                            coroutineScope.launch { listState.scrollToItem(targetIndex) }
+                                        alphabetIndexMap[char]?.let { targetIndex ->
+                                            coroutineScope.launch {
+                                                listState.scrollToItem(targetIndex)
+                                                gridState.scrollToItem(targetIndex)
+                                            }
                                         }
                                     }
                                     .padding(horizontal = 4.dp, vertical = 0.5.dp)
@@ -1321,7 +1449,8 @@ fun ArtistDetailScreen(
     var showSortMenu by remember { mutableStateOf(false) }
 
     val currentSongs = remember(artistItem.name, manager.parsedArtistsList, ArtistDataManager.refreshTrigger) {
-        manager.parsedArtistsList.find { it.name.equals(artistItem.name, ignoreCase = true) }?.songs ?: artistItem.songs
+        val updatedGroup = manager.parsedArtistsList
+        updatedGroup.find { it.name.equals(artistItem.name, ignoreCase = true) }?.songs ?: artistItem.songs
     }
 
     val sortedSongs: ImmutableList<Song> = remember(currentSongs, manager.artistInnerSortOrder) {
@@ -1401,12 +1530,28 @@ fun ArtistDetailScreen(
                             SortListVector(tint = accent, modifier = Modifier.size(18.dp))
                         }
 
-                        DropdownMenu(expanded = showSortMenu, onDismissRequest = { showSortMenu = false }) {
-                            DropdownMenuItem(text = { Text("A to Z") }, onClick = { manager.setPersistentArtistInnerSort(SongSortOrder.A_TO_Z); showSortMenu = false })
-                            DropdownMenuItem(text = { Text("Z to A") }, onClick = { manager.setPersistentArtistInnerSort(SongSortOrder.Z_TO_A); showSortMenu = false })
-                            DropdownMenuItem(text = { Text("Duration") }, onClick = { manager.setPersistentArtistInnerSort(SongSortOrder.DURATION); showSortMenu = false })
-                            DropdownMenuItem(text = { Text("File Size") }, onClick = { manager.setPersistentArtistInnerSort(SongSortOrder.FILE_SIZE); showSortMenu = false })
-                            DropdownMenuItem(text = { Text("Newest First") }, onClick = { manager.setPersistentArtistInnerSort(SongSortOrder.NEWEST); showSortMenu = false })
+                        GlassmorphicDropdownMenu(
+                            expanded = showSortMenu,
+                            onDismissRequest = { showSortMenu = false },
+                            manager = manager
+                        ) {
+                            listOf(
+                                Pair("A to Z", SongSortOrder.A_TO_Z),
+                                Pair("Z to A", SongSortOrder.Z_TO_A),
+                                Pair("Duration", SongSortOrder.DURATION),
+                                Pair("File Size", SongSortOrder.FILE_SIZE),
+                                Pair("Newest First", SongSortOrder.NEWEST)
+                            ).forEach { (label, order) ->
+                                GlassDropdownMenuItem(
+                                    text = label,
+                                    isSelected = manager.artistInnerSortOrder == order,
+                                    manager = manager,
+                                    onClick = {
+                                        manager.setPersistentArtistInnerSort(order)
+                                        showSortMenu = false
+                                    }
+                                )
+                            }
                         }
                     }
 
@@ -1417,14 +1562,14 @@ fun ArtistDetailScreen(
                             .size(36.dp)
                             .clip(CircleShape)
                             .background(cardBg)
-                            .border(1.2.dp, accent.copy(alpha = 0.5f), CircleShape)
+                            .border(1.2.dp, glassBorderBrush, CircleShape)
                             .clickable {
                                 val shuffled = sortedSongs.shuffled()
                                 if (shuffled.isNotEmpty()) manager.playSong(shuffled.first(), shuffled, artistItem.name)
                             },
                         contentAlignment = Alignment.Center
                     ) {
-                        ShuffleActionVector(tint = accent, modifier = Modifier.size(22.dp))
+                        ShuffleActionVector(tint = accent, modifier = Modifier.size(20.dp))
                     }
                 }
             }
@@ -1556,7 +1701,7 @@ fun ArtistDetailScreen(
 }
 
 // =========================================================================
-// 📌 ARTIST ADD SONGS DIALOG (Rendered directly at the root level)
+// 📌 ARTIST ADD SONGS DIALOG (Hardware-Accelerated Fluid Keyboard Padding)
 // =========================================================================
 
 @Composable
@@ -1571,15 +1716,9 @@ fun ArtistAddSongsDialog(
     val cardBg = manager.getCurrentSurfaceColor()
     val accent = manager.accentColor
 
-    val modalScrollInterceptor = remember {
-        object : NestedScrollConnection {
-            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset = Offset.Zero
-            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset = available
-        }
-    }
-
     val currentArtist = remember(artistName, manager.parsedArtistsList, ArtistDataManager.refreshTrigger) {
-        manager.parsedArtistsList.find { it.name.equals(artistName, ignoreCase = true) }
+        val updatedGroup = manager.parsedArtistsList
+        updatedGroup.find { it.name.equals(artistName, ignoreCase = true) }
     }
     val currentSongIdSet = remember(currentArtist) {
         currentArtist?.songs?.map { it.id }?.toHashSet() ?: hashSetOf()
@@ -1587,20 +1726,21 @@ fun ArtistAddSongsDialog(
 
     var addSongSearch by remember { mutableStateOf("") }
     val candidates = remember(addSongSearch, currentSongIdSet, manager.allSongs.size) {
+        val q = addSongSearch.trim()
         manager.allSongs.filter {
             !currentSongIdSet.contains(it.id) &&
-            (it.title.contains(addSongSearch, ignoreCase = true) || it.artist.contains(addSongSearch, ignoreCase = true))
+            (q.isEmpty() || it.title.contains(q, ignoreCase = true) || it.artist.contains(q, ignoreCase = true))
         }
     }
 
     val dialogSurface = manager.getCurrentDialogColor()
-    val glassBorder = manager.getGlassBorderBrush()
+    val glassBorderBrush = manager.getGlassBorderBrush()
 
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .zIndex(999f)
             .background(Color(0x77000000))
-            .nestedScroll(modalScrollInterceptor)
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
                 onDismiss()
             },
@@ -1609,17 +1749,22 @@ fun ArtistAddSongsDialog(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(600.dp)
+                .fillMaxHeight(0.85f)
+                .imePadding()
                 .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
                 .background(dialogSurface)
-                .border(1.5.dp, glassBorder, RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
+                .border(1.5.dp, glassBorderBrush, RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
                 .clickable(enabled = false) {}
                 .padding(20.dp)
         ) {
-            Column {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Text("Add Songs to $artistName", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = textColor)
-                    Button(onClick = { onDismiss() }, shape = RoundedCornerShape(8.dp)) { Text("Done") }
+                    Button(onClick = onDismiss, shape = RoundedCornerShape(8.dp)) { Text("Done") }
                 }
                 Spacer(modifier = Modifier.height(10.dp))
 
@@ -1653,10 +1798,8 @@ fun ArtistAddSongsDialog(
                                 .clip(RoundedCornerShape(10.dp))
                                 .background(if (isDark) Color(0x1AFFFFFF) else Color(0xFFF1F5F9))
                                 .clickable {
-                                    val list = ArtistDataManager.movedSongMap.getOrPut(artistName) { mutableListOf() }
-                                    if (!list.contains(song.id)) list.add(song.id)
-                                    ArtistDataManager.removedSongMap[artistName]?.remove(song.id)
-                                    ArtistDataManager.refreshTrigger++
+                                    ArtistDataManager.addSongToArtist(artistName, song.id)
+                                    manager.refreshArtistsInBackground()
                                     Toast.makeText(context, "Added ${song.title}", Toast.LENGTH_SHORT).show()
                                 }
                                 .padding(12.dp),
@@ -1675,6 +1818,10 @@ fun ArtistAddSongsDialog(
     }
 }
 
+// =========================================================================
+// 📌 CREATE ARTIST DIALOG (Zero-Lag Hardware-Accelerated 120Hz Animation)
+// =========================================================================
+
 @Composable
 fun CreateArtistDialog(
     manager: MusicManager,
@@ -1686,37 +1833,29 @@ fun CreateArtistDialog(
     val cardBg = manager.getCurrentSurfaceColor()
     val accentColor = manager.accentColor
 
-    val density = LocalDensity.current
-    val isImeVisible = WindowInsets.ime.getBottom(density) > 0
-    val bottomInsetPadding = if (isImeVisible) {
-        WindowInsets.ime.asPaddingValues().calculateBottomPadding()
-    } else {
-        WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-    }
-
-    val dialogScrollInterceptor = remember {
-        object : NestedScrollConnection {
-            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset = Offset.Zero
-            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset = available
-        }
-    }
-
     val dialogSurface = manager.getCurrentDialogColor()
-    val glassBorder = manager.getGlassBorderBrush()
+    val glassBorderBrush = manager.getGlassBorderBrush()
 
     var artistName by remember { mutableStateOf("") }
     var searchSongQuery by remember { mutableStateOf("") }
     val selectedSongs = remember { mutableStateListOf<Song>() }
 
-    val filteredSongs = manager.allSongs.filter {
-        it.title.contains(searchSongQuery, ignoreCase = true) || it.artist.contains(searchSongQuery, ignoreCase = true)
+    val filteredSongs = remember(searchSongQuery, manager.allSongs.size) {
+        val q = searchSongQuery.trim()
+        if (q.isEmpty()) {
+            manager.allSongs
+        } else {
+            manager.allSongs.filter {
+                it.title.contains(q, ignoreCase = true) || it.artist.contains(q, ignoreCase = true)
+            }
+        }
     }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .zIndex(999f)
             .background(Color(0x77000000))
-            .nestedScroll(dialogScrollInterceptor)
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
                 onDismiss()
             },
@@ -1725,11 +1864,11 @@ fun CreateArtistDialog(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = bottomInsetPadding)
-                .height(650.dp)
+                .fillMaxHeight(0.85f)
+                .imePadding()
                 .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
                 .background(dialogSurface)
-                .border(1.5.dp, glassBorder, RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
+                .border(1.5.dp, glassBorderBrush, RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
                 .clickable(enabled = false) {}
                 .padding(22.dp)
         ) {
@@ -1813,6 +1952,7 @@ fun CreateArtistDialog(
                         val name = artistName.trim()
                         if (name.isNotBlank()) {
                             ArtistDataManager.createNewArtist(name, selectedSongs)
+                            manager.refreshArtistsInBackground()
                             Toast.makeText(context, "Artist created!", Toast.LENGTH_SHORT).show()
                             onDismiss()
                         } else {
@@ -1829,6 +1969,10 @@ fun CreateArtistDialog(
         }
     }
 }
+
+// =========================================================================
+// 📌 ARTIST FAVORITES INTEGRATION
+// =========================================================================
 
 fun addArtistToFavouritePlaylists(context: Context, manager: MusicManager, artist: ArtistItem) {
     val existingIndex = manager.customPlaylists.indexOfFirst { it.name.equals(artist.name, ignoreCase = true) }

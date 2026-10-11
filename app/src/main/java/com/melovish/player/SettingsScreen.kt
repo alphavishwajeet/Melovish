@@ -15,6 +15,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -43,7 +45,6 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -52,9 +53,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -64,6 +65,7 @@ import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -72,6 +74,7 @@ import coil.compose.AsyncImage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.io.File
+import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.roundToInt
@@ -147,7 +150,7 @@ fun SettingsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = 16.dp),
-            contentPadding = PaddingValues(bottom = 80.dp),
+            contentPadding = PaddingValues(bottom = 120.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             item(key = "settings_header", contentType = "header") {
@@ -193,7 +196,6 @@ fun SettingsScreen(
                             .padding(14.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Option A Dynamic Frosted Glass Avatar Container
                         Box(
                             modifier = Modifier
                                 .size(54.dp)
@@ -282,12 +284,13 @@ fun SettingsScreen(
                                     if (mode == "Dark" && isSel) {
                                         Text(
                                             when (manager.darkThemeSubStyle) {
-                                                DarkThemeSubStyle.AMOLED_BLACK -> "AMOLED"
+                                                DarkThemeSubStyle.AMOLED_BLACK -> "BLACK"
                                                 DarkThemeSubStyle.BLUISH -> "Slate"
                                                 DarkThemeSubStyle.CUSTOM -> "Custom"
                                             },
-                                            color = accent.copy(alpha = 0.8f),
-                                            fontSize = 9.sp
+                                            color = accent.copy(alpha = 0.85f),
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.Bold
                                         )
                                     } else if (mode == "Light" && isSel) {
                                         Text(
@@ -329,7 +332,6 @@ fun SettingsScreen(
                             )
                         }
 
-                        // Completely decoupled accent color picker trigger
                         Box(
                             modifier = Modifier
                                 .size(38.dp)
@@ -770,7 +772,232 @@ fun SettingsScreen(
                 }
             }
 
-            // 5. Content Manager Section
+            // 5. Custom Audio Effects Section
+            item(key = "custom_audio_effects_section", contentType = "custom_dsp_card") {
+                AudioEffectsSettingsSection(
+                    manager = manager,
+                    isDark = isDark
+                )
+            }
+
+            // 6. Frosted Glass Styling Section
+            item(key = "frosted_glass_section", contentType = "frosted_glass_card") {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(22.dp))
+                        .background(cardBg)
+                        .border(1.2.dp, glassBorderBrush, RoundedCornerShape(22.dp))
+                        .padding(18.dp)
+                ) {
+                    SettingSwitchRow(
+                        icon = "✨",
+                        title = "Frosted Glass Effect",
+                        subtitle = "Enable glassmorphism with depth blur",
+                        checked = manager.isFrostedGlassEnabled,
+                        textColor = textColor,
+                        accentColor = accent
+                    ) {
+                        manager.triggerHapticFeedback(true)
+                        manager.toggleFrostedGlass(it)
+                    }
+
+                    AnimatedVisibility(
+                        visible = manager.isFrostedGlassEnabled,
+                        enter = expandVertically() + fadeIn(),
+                        exit = shrinkVertically() + fadeOut()
+                    ) {
+                        Column(modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("Glass Visibility", color = textColor, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                val label = when {
+                                    manager.frostedGlassOpacity <= 0.25f -> "Clear"
+                                    manager.frostedGlassOpacity <= 0.70f -> "Frosted"
+                                    else -> "Opaque"
+                                }
+                                Text(
+                                    "$label (${(manager.frostedGlassOpacity * 100).toInt()}%)",
+                                    color = accent,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(38.dp)
+                                    .pointerInput(Unit) {
+                                        awaitEachGesture {
+                                            val down = awaitFirstDown(requireUnconsumed = false)
+                                            val trackPadding = 8.dp.toPx()
+                                            val usableW = (size.width - (trackPadding * 2)).coerceAtLeast(1f)
+
+                                            fun processPosition(rawX: Float) {
+                                                val rawFraction = ((rawX - trackPadding) / usableW).coerceIn(0f, 1f)
+                                                val snappedStep = (rawFraction * 20f).roundToInt() / 20f
+                                                val diff = abs(rawFraction - snappedStep)
+                                                val finalFrac = if (diff < 0.022f) snappedStep else rawFraction
+
+                                                val oldPercent = (manager.frostedGlassOpacity * 100).toInt()
+                                                val newPercent = (finalFrac * 100).toInt()
+                                                if (newPercent != oldPercent && newPercent % 5 == 0) {
+                                                    manager.triggerHapticFeedback(newPercent % 25 == 0)
+                                                }
+                                                manager.updateFrostedGlassOpacity(finalFrac)
+                                            }
+
+                                            processPosition(down.position.x)
+
+                                            while (true) {
+                                                val event = awaitPointerEvent()
+                                                val change = event.changes.firstOrNull() ?: break
+                                                if (change.pressed) {
+                                                    change.consume()
+                                                    processPosition(change.position.x)
+                                                } else {
+                                                    break
+                                                }
+                                            }
+                                        }
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Canvas(modifier = Modifier.fillMaxSize()) {
+                                    val centerY = size.height / 2f
+                                    val trackPadding = 8.dp.toPx()
+                                    val trackWidth = size.width - (trackPadding * 2)
+                                    val trackHeight = 12.dp.toPx()
+                                    val trackRadius = trackHeight / 2f
+
+                                    val currentFraction = manager.frostedGlassOpacity.coerceIn(0f, 1f)
+                                    val thumbCenterX = trackPadding + (currentFraction * trackWidth)
+
+                                    val thumbIndicatorWidth = 4.dp.toPx()
+                                    val thumbHeight = 22.dp.toPx()
+                                    val clearanceGap = 4.5.dp.toPx()
+
+                                    // 1. ACTIVE SEGMENT
+                                    val activeEndX = (thumbCenterX - (thumbIndicatorWidth / 2f) - clearanceGap).coerceAtLeast(trackPadding)
+                                    val activeFillWidth = activeEndX - trackPadding
+                                    if (activeFillWidth > 0f) {
+                                        drawRoundRect(
+                                            color = accent,
+                                            topLeft = Offset(trackPadding, centerY - (trackHeight / 2f)),
+                                            size = Size(activeFillWidth, trackHeight),
+                                            cornerRadius = CornerRadius(trackRadius, trackRadius)
+                                        )
+                                    }
+
+                                    // 2. INACTIVE SEGMENT
+                                    val inactiveStartX = (thumbCenterX + (thumbIndicatorWidth / 2f) + clearanceGap).coerceAtMost(trackPadding + trackWidth)
+                                    val inactiveWidth = (trackPadding + trackWidth) - inactiveStartX
+                                    if (inactiveWidth > 0f) {
+                                        val inactiveColor = if (isDark) Color(0xFF1E293B) else Color(0xFFE2E8F0)
+                                        drawRoundRect(
+                                            color = inactiveColor,
+                                            topLeft = Offset(inactiveStartX, centerY - (trackHeight / 2f)),
+                                            size = Size(inactiveWidth, trackHeight),
+                                            cornerRadius = CornerRadius(trackRadius, trackRadius)
+                                        )
+
+                                        // 3. MAGNETIC ACCENT DOTS
+                                        for (i in 0..20) {
+                                            val dotFraction = i / 20f
+                                            val dotX = trackPadding + (dotFraction * trackWidth)
+
+                                            if (dotX >= inactiveStartX + 2.dp.toPx()) {
+                                                val isProminent = (i % 5 == 0)
+                                                val dotRadius = if (isProminent) 2.6.dp.toPx() else 1.5.dp.toPx()
+                                                val dotColor = if (isProminent) accent else accent.copy(alpha = 0.55f)
+
+                                                drawCircle(
+                                                    color = dotColor,
+                                                    radius = dotRadius,
+                                                    center = Offset(dotX, centerY)
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    // 4. VERTICAL INDICATOR THUMB LINE
+                                    drawRoundRect(
+                                        color = accent,
+                                        topLeft = Offset(thumbCenterX - (thumbIndicatorWidth / 2f), centerY - (thumbHeight / 2f)),
+                                        size = Size(thumbIndicatorWidth, thumbHeight),
+                                        cornerRadius = CornerRadius(2.dp.toPx(), 2.dp.toPx())
+                                    )
+                                }
+                            }
+
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 8.dp)
+                            ) {
+                                Text(
+                                    text = "Clear",
+                                    color = Color(0xFF64748B),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.align(Alignment.CenterStart)
+                                )
+
+                                Text(
+                                    text = "Frosted",
+                                    color = Color(0xFF64748B),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.align(Alignment.Center)
+                                )
+
+                                Text(
+                                    text = "Opaque",
+                                    color = Color(0xFF64748B),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.align(Alignment.CenterEnd)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 7. Haptics & Feedback Section
+            item(key = "haptics_section", contentType = "haptics_card") {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(22.dp))
+                        .background(cardBg)
+                        .border(1.2.dp, glassBorderBrush, RoundedCornerShape(22.dp))
+                        .padding(18.dp)
+                ) {
+                    Text("Haptics & Feedback", color = textColor, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Text("Configure tactile vibration responses for sliders and controls.", color = Color(0xFF64748B), fontSize = 12.sp)
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    SettingSwitchRow(
+                        icon = "📳",
+                        title = "Haptic Feedback",
+                        subtitle = "Vibrate when adjusting sliders, switches, and scrubbers",
+                        checked = manager.isHapticsEnabled,
+                        textColor = textColor,
+                        accentColor = accent
+                    ) {
+                        manager.toggleHaptics(it)
+                    }
+                }
+            }
+
+            // 8. Content Manager Section (Bottom)
             item(key = "content_manager_section", contentType = "content_manager_card") {
                 Column(
                     modifier = Modifier
@@ -826,111 +1053,6 @@ fun SettingsScreen(
                         ) {
                             Text("Manage", color = textColor, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         }
-                    }
-                }
-            }
-
-            // 6. Frosted Glass Styling (Between Content Manager & Haptics)
-            item(key = "frosted_glass_section", contentType = "frosted_glass_card") {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(22.dp))
-                        .background(cardBg)
-                        .border(1.2.dp, glassBorderBrush, RoundedCornerShape(22.dp))
-                        .padding(18.dp)
-                ) {
-                    SettingSwitchRow(
-                        icon = "✨",
-                        title = "Frosted Glass UI Effect",
-                        subtitle = "Enable transparent glass surfaces with depth blur",
-                        checked = manager.isFrostedGlassEnabled,
-                        textColor = textColor,
-                        accentColor = accent
-                    ) {
-                        manager.triggerHapticFeedback(true)
-                        manager.toggleFrostedGlass(it)
-                    }
-
-                    AnimatedVisibility(
-                        visible = manager.isFrostedGlassEnabled,
-                        enter = expandVertically() + fadeIn(),
-                        exit = shrinkVertically() + fadeOut()
-                    ) {
-                        Column(modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text("Glass Transparency", color = textColor, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                                val label = when {
-                                    manager.frostedGlassOpacity <= 0.25f -> "Transparent"
-                                    manager.frostedGlassOpacity <= 0.70f -> "Frosted"
-                                    else -> "Opaque"
-                                }
-                                Text(
-                                    "$label (${(manager.frostedGlassOpacity * 100).toInt()}%)",
-                                    color = accent,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Slider(
-                                value = manager.frostedGlassOpacity,
-                                onValueChange = { newOpacity ->
-                                    val oldInt = (manager.frostedGlassOpacity * 100).toInt()
-                                    val newInt = (newOpacity * 100).toInt()
-                                    if (newInt != oldInt && newInt % 5 == 0) {
-                                        manager.triggerHapticFeedback(false)
-                                    }
-                                    manager.updateFrostedGlassOpacity(newOpacity)
-                                },
-                                valueRange = 0.0f..1.0f,
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = SliderDefaults.colors(
-                                    thumbColor = accent,
-                                    activeTrackColor = accent,
-                                    inactiveTrackColor = if (isDark) Color(0xFF334155) else Color(0xFFE2E8F0)
-                                )
-                            )
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text("Glass (Clear)", color = Color(0xFF64748B), fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                                Text("Frosted", color = Color(0xFF64748B), fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                                Text("Opaque", color = Color(0xFF64748B), fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                            }
-                        }
-                    }
-                }
-            }
-
-            // 7. Haptics & Feedback Section
-            item(key = "haptics_section", contentType = "haptics_card") {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(22.dp))
-                        .background(cardBg)
-                        .border(1.2.dp, glassBorderBrush, RoundedCornerShape(22.dp))
-                        .padding(18.dp)
-                ) {
-                    Text("Haptics & Feedback", color = textColor, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                    Text("Configure tactile vibration responses for sliders and controls.", color = Color(0xFF64748B), fontSize = 12.sp)
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    SettingSwitchRow(
-                        icon = "📳",
-                        title = "Haptic Feedback",
-                        subtitle = "Vibrate when adjusting sliders, switches, and scrubbers",
-                        checked = manager.isHapticsEnabled,
-                        textColor = textColor,
-                        accentColor = accent
-                    ) {
-                        manager.toggleHaptics(it)
                     }
                 }
             }
@@ -1091,8 +1213,8 @@ fun LightThemeVariantDialog(
                 Spacer(modifier = Modifier.height(6.dp))
 
                 listOf(
-                    Pair(LightThemeSubStyle.WHITE, Pair("Pure Porcelain White", "Clean, modern crisp white style")),
-                    Pair(LightThemeSubStyle.CREAM, Pair("Warm Cream / Pale Linen", "Gentle off-white cream tone with soft warmth"))
+                    Pair(LightThemeSubStyle.WHITE, Pair("Pure Porcelain White", "Clean modern white background")),
+                    Pair(LightThemeSubStyle.CREAM, Pair("Pale Warm Cream", "Gentle white cream background"))
                 ).forEach { (style, textPair) ->
                     val isSel = currentStyle == style
                     Row(
