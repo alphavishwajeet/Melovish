@@ -16,6 +16,7 @@ import android.graphics.BitmapFactory
 import android.media.AudioDeviceCallback
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
+import android.media.MediaMetadataRetriever
 import android.media.MediaScannerConnection
 import android.media.RingtoneManager
 import android.media.audiofx.BassBoost
@@ -2518,19 +2519,17 @@ class MusicManager(val context: Context) {
         if (song.customCoverPath != null && File(song.customCoverPath).exists()) {
             return Uri.fromFile(File(song.customCoverPath))
         }
-        return if (song.albumId > 0L) {
-            ContentUris.withAppendedId(Uri.parse("content://media/external/audio/albumart"), song.albumId)
-        } else {
-            null
-        }
+        return song.uri
     }
 
+    // ⚡ Direct Track-Exclusive Artwork Extractor (Bypasses Shared MediaStore album_id)
     suspend fun loadAlbumArtAsync(song: Song): Bitmap? = withContext(Dispatchers.IO) {
         val cached = memoryCache.get(song.id)
         if (cached != null) return@withContext cached
 
         var resultBitmap: Bitmap? = null
 
+        // 1. User-custom cover check
         if (song.customCoverPath != null) {
             val file = File(song.customCoverPath)
             if (file.exists()) {
@@ -2542,18 +2541,47 @@ class MusicManager(val context: Context) {
             }
         }
 
-        if (resultBitmap == null && song.albumId > 0L) {
+        // 2. Direct embedded ID3 tag extraction from song file bytes
+        if (resultBitmap == null) {
+            var retriever: MediaMetadataRetriever? = null
             try {
-                val sArtworkUri = Uri.parse("content://media/external/audio/albumart")
-                val uri = ContentUris.withAppendedId(sArtworkUri, song.albumId)
-                context.contentResolver.openInputStream(uri)?.use { stream ->
+                retriever = MediaMetadataRetriever()
+                retriever.setDataSource(context, song.uri)
+                val rawBytes = retriever.embeddedPicture
+                if (rawBytes != null && rawBytes.isNotEmpty()) {
                     val opts = BitmapFactory.Options().apply {
                         inSampleSize = 2
                         inPreferredConfig = Bitmap.Config.RGB_565
                     }
-                    resultBitmap = BitmapFactory.decodeStream(stream, null, opts)
+                    resultBitmap = BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size, opts)
                 }
-            } catch (_: Exception) {}
+            } catch (_: Exception) {
+            } finally {
+                try { retriever?.release() } catch (_: Exception) {}
+            }
+        }
+
+        // 3. Direct file path fallback if URI read was restricted
+        if (resultBitmap == null && song.path.isNotBlank()) {
+            val localFile = File(song.path)
+            if (localFile.exists() && localFile.canRead()) {
+                var retriever: MediaMetadataRetriever? = null
+                try {
+                    retriever = MediaMetadataRetriever()
+                    retriever.setDataSource(localFile.absolutePath)
+                    val rawBytes = retriever.embeddedPicture
+                    if (rawBytes != null && rawBytes.isNotEmpty()) {
+                        val opts = BitmapFactory.Options().apply {
+                            inSampleSize = 2
+                            inPreferredConfig = Bitmap.Config.RGB_565
+                        }
+                        resultBitmap = BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size, opts)
+                    }
+                } catch (_: Exception) {
+                } finally {
+                    try { retriever?.release() } catch (_: Exception) {}
+                }
+            }
         }
 
         val finalBmp = resultBitmap
