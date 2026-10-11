@@ -2150,7 +2150,6 @@ fun PlaylistDetailScreen(
         }.toImmutableList()
     }
 
-    // ⚡ Local blur removed to eliminate double blur stacking over root blur
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
@@ -2172,6 +2171,22 @@ fun PlaylistDetailScreen(
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    // 1. [+] Add Songs Button (Shifted to Far Left)
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(cardBg)
+                            .border(1.2.dp, glassBorderBrush, CircleShape)
+                            .clickable { onOpenAddSongsDialog() },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        AddTrackActionVector(tint = accent, modifier = Modifier.size(18.dp))
+                    }
+
+                    Spacer(modifier = Modifier.width(6.dp))
+
+                    // 2. View Options Button (Grid Mode Switcher)
                     Box(
                         modifier = Modifier
                             .size(36.dp)
@@ -2189,6 +2204,7 @@ fun PlaylistDetailScreen(
 
                     Spacer(modifier = Modifier.width(6.dp))
 
+                    // 3. Sort Options Button (Dropdown Menu)
                     Box {
                         Box(
                             modifier = Modifier
@@ -2229,20 +2245,7 @@ fun PlaylistDetailScreen(
 
                     Spacer(modifier = Modifier.width(6.dp))
 
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(CircleShape)
-                            .background(cardBg)
-                            .border(1.2.dp, glassBorderBrush, CircleShape)
-                            .clickable { onOpenAddSongsDialog() }, // 👈 Clean root-level modal trigger
-                        contentAlignment = Alignment.Center
-                    ) {
-                        AddTrackActionVector(tint = accent, modifier = Modifier.size(18.dp))
-                    }
-
-                    Spacer(modifier = Modifier.width(6.dp))
-
+                    // 4. Shuffle Button (Far Right)
                     Box(
                         modifier = Modifier
                             .size(36.dp)
