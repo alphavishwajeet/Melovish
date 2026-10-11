@@ -15,9 +15,6 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.compose.setContent
-import androidx.activity.result.ActivityResultLauncher
-import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.animation.AnimatedVisibility
@@ -72,7 +69,6 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -154,25 +150,15 @@ import androidx.core.view.WindowCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.media3.common.util.UnstableApi
 import coil.compose.AsyncImage
-import coil.request.ImageRequest
-import coil.size.Precision
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.toImmutableList
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.Locale
-import kotlin.math.abs
-import kotlin.math.atan2
-import kotlin.math.cos
-import kotlin.math.roundToInt
-import kotlin.math.sin
-import kotlin.math.sqrt
 
 // =========================================================================
-// 📌 CUSTOM VECTOR COMPONENTS
+// 📌 CUSTOM VECTOR ICONS
 // =========================================================================
 
 @Composable
@@ -318,16 +304,6 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 @UnstableApi
 class MainActivity : ComponentActivity() {
     private val viewModel by viewModels<MusicViewModel>()
-
-    val writeRequestLauncher: ActivityResultLauncher<IntentSenderRequest> =
-        registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
-            if (result.resultCode == Activity.RESULT_OK) {
-                viewModel.manager.executePendingStorageWrite()
-            } else {
-                Toast.makeText(this, "Permission denied: File not modified", Toast.LENGTH_SHORT).show()
-                viewModel.manager.clearPendingStorageWrite()
-            }
-        }
 
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -485,6 +461,7 @@ fun MelovishRootApp(manager: MusicManager) {
     var showRootCreateArtistDialog by remember { mutableStateOf(false) }
     var showRootGridSizeDialog by remember { mutableStateOf(false) }
     var showRootArtistAddSongsDialog by remember { mutableStateOf(false) }
+    var activePlaylistForAddSearch by remember { mutableStateOf<Playlist?>(null) }
 
     SideEffect {
         if (activity != null) {
@@ -513,8 +490,8 @@ fun MelovishRootApp(manager: MusicManager) {
             rootCustomizingFolder != null || rootCustomizingPlaylist != null || rootSelectedArtistForActions != null ||
             rootSelectedArtistSongForAction != null || showRootDarkSubStyleDialog || showRootLightSubStyleDialog ||
             rootColorPickerMode != null || showRootCreateArtistDialog || showRootGridSizeDialog || showRootArtistAddSongsDialog ||
-            isSettingsEqOpen || activeSongForMenu != null || activeTagEditSong != null || activeAddToPlaylistSong != null ||
-            activeSongInfo != null
+            activePlaylistForAddSearch != null || isSettingsEqOpen || activeSongForMenu != null || activeTagEditSong != null || 
+            activeAddToPlaylistSong != null || activeSongInfo != null
 
     val topBarNestedScrollConnection = remember(isMainTabScreen, isAnyRootModalOpen) {
         object : NestedScrollConnection {
@@ -537,16 +514,13 @@ fun MelovishRootApp(manager: MusicManager) {
         }
     }
 
-    val canGoBack = showRootCreatePlaylistDialog || showRootManagePlaylistsDialog || showRootArrangePlaylistsDialog ||
-            rootCustomizingFolder != null || rootCustomizingPlaylist != null || rootSelectedArtistForActions != null ||
-            rootSelectedArtistSongForAction != null || showRootDarkSubStyleDialog || showRootLightSubStyleDialog ||
-            rootColorPickerMode != null || showRootCreateArtistDialog || showRootGridSizeDialog || showRootArtistAddSongsDialog ||
-            isSettingsEqOpen || isPlayerExpanded || activeScreen == "settings" ||
+    val canGoBack = isAnyRootModalOpen || isPlayerExpanded || activeScreen == "settings" ||
             activeScreen == "profile" || selectedArtist != null || selectedAlbum != null ||
             selectedPlaylist != null || selectedFolder != null || activeScreen != "home"
 
     BackHandler(enabled = canGoBack) {
         when {
+            activePlaylistForAddSearch != null -> activePlaylistForAddSearch = null
             showRootCreatePlaylistDialog -> showRootCreatePlaylistDialog = false
             showRootManagePlaylistsDialog -> showRootManagePlaylistsDialog = false
             showRootArrangePlaylistsDialog -> showRootArrangePlaylistsDialog = false
@@ -598,11 +572,6 @@ fun MelovishRootApp(manager: MusicManager) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .graphicsLayer {
-                        if (animatedRootBlur.value > 0.5f) {
-                            renderEffect = null
-                        }
-                    }
                     .blur(animatedRootBlur)
                     .padding(top = statusBarTopPadding)
             ) {
@@ -691,7 +660,8 @@ fun MelovishRootApp(manager: MusicManager) {
                                 onSongMenuClick = { song: Song -> activeSongForMenu = song },
                                 onSongClick = { song, songs -> handleSmartSongClick(song, songs, curPlaylist.name) },
                                 onFolderClick = { folder: String -> selectedFolder = folder },
-                                onOpenGridSizeDialog = { showRootGridSizeDialog = true }
+                                onOpenGridSizeDialog = { showRootGridSizeDialog = true },
+                                onOpenAddSongsDialog = { activePlaylistForAddSearch = curPlaylist }
                             )
                         }
                         selectedFolder != null -> {
@@ -793,6 +763,7 @@ fun MelovishRootApp(manager: MusicManager) {
                 }
             }
 
+            // Status Bar Overlay Header: Hides cleanly during modals to prevent double/unblurred blur seams
             if (!isAnyRootModalOpen) {
                 Box(
                     modifier = Modifier
@@ -863,6 +834,20 @@ fun MelovishRootApp(manager: MusicManager) {
                         artistName = selectedArtist!!.name,
                         manager = manager,
                         onDismiss = { showRootArtistAddSongsDialog = false }
+                    )
+                }
+            }
+
+            if (activePlaylistForAddSearch != null) {
+                Box(modifier = Modifier.zIndex(999f)) {
+                    PlaylistAddSearchDialog(
+                        playlist = activePlaylistForAddSearch!!,
+                        manager = manager,
+                        onDismiss = { activePlaylistForAddSearch = null },
+                        onNavigateToFolder = { folder ->
+                            activePlaylistForAddSearch = null
+                            selectedFolder = folder
+                        }
                     )
                 }
             }
@@ -1174,7 +1159,8 @@ fun MelovishRootApp(manager: MusicManager) {
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(550.dp)
+                                    .fillMaxHeight(0.85f)
+                                    .imePadding()
                                     .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
                                     .background(manager.getCurrentDialogColor())
                                     .border(1.2.dp, manager.getGlassBorderBrush(), RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
@@ -1211,37 +1197,37 @@ fun MelovishRootApp(manager: MusicManager) {
                                                     .fillMaxWidth()
                                                     .clip(RoundedCornerShape(12.dp))
                                                     .background(if (isDark) Color(0x1AFFFFFF) else Color(0xFFF1F5F9))
-                                                .clickable {
-                                                    ArtistDataManager.moveSongToArtist(song, artistName, target.name)
-                                                    manager.refreshArtistsInBackground()
-                                                    Toast.makeText(context, "Moved to ${target.name}", Toast.LENGTH_SHORT).show()
-                                                    rootSelectedArtistSongForAction = null
-                                                }
-                                                .padding(12.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Text("🎙️", fontSize = 18.sp)
-                                            Spacer(modifier = Modifier.width(10.dp))
-                                            Text(target.name, color = manager.getCurrentTextColor(), fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                                    .clickable {
+                                                        ArtistDataManager.moveSongToArtist(song, artistName, target.name)
+                                                        manager.refreshArtistsInBackground()
+                                                        Toast.makeText(context, "Moved to ${target.name}", Toast.LENGTH_SHORT).show()
+                                                        rootSelectedArtistSongForAction = null
+                                                    }
+                                                    .padding(12.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text("🎙️", fontSize = 18.sp)
+                                                Spacer(modifier = Modifier.width(10.dp))
+                                                Text(target.name, color = manager.getCurrentTextColor(), fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                            }
                                         }
                                     }
-                                }
 
-                                Spacer(modifier = Modifier.height(10.dp))
-                                Button(
-                                    onClick = { rootSelectedArtistSongForAction = null },
-                                    modifier = Modifier.fillMaxWidth().height(48.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = if (isDark) Color(0x22FFFFFF) else Color(0xFFF1F5F9)),
-                                    shape = RoundedCornerShape(12.dp)
-                                ) {
-                                    Text("Cancel", color = manager.getCurrentTextColor(), fontWeight = FontWeight.Bold)
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                    Button(
+                                        onClick = { rootSelectedArtistSongForAction = null },
+                                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = if (isDark) Color(0x22FFFFFF) else Color(0xFFF1F5F9)),
+                                        shape = RoundedCornerShape(12.dp)
+                                    ) {
+                                        Text("Cancel", color = manager.getCurrentTextColor(), fontWeight = FontWeight.Bold)
+                                    }
                                 }
                             }
                         }
                     }
                 }
             }
-        }
 
             if (activeSongForMenu != null) {
                 val s = activeSongForMenu!!
@@ -1320,7 +1306,7 @@ fun MelovishRootApp(manager: MusicManager) {
 }
 
 // =========================================================================
-// 📌 HOME SCREEN (Zero-Allocation Memoized 120Hz Fast-Fling Lists)
+// 📌 HOME SCREEN (Zero-Allocation Memoized Lists)
 // =========================================================================
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -1552,37 +1538,37 @@ fun HomeScreen(
                                     .background(cardBg)
                                     .border(1.2.dp, glassBorderBrush, CircleShape)
                                     .clickable { showSortMenu = true },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            SortListVector(tint = accent, modifier = Modifier.size(18.dp))
-                        }
+                                contentAlignment = Alignment.Center
+                            ) {
+                                SortListVector(tint = accent, modifier = Modifier.size(18.dp))
+                            }
 
-                        GlassmorphicDropdownMenu(
-                            expanded = showSortMenu,
-                            onDismissRequest = { showSortMenu = false },
-                            manager = manager
-                        ) {
-                            listOf(
-                                Pair("A to Z", SongSortOrder.A_TO_Z),
-                                Pair("Z to A", SongSortOrder.Z_TO_A),
-                                Pair("Newest First", SongSortOrder.NEWEST),
-                                Pair("Oldest First", SongSortOrder.OLDEST),
-                                Pair("By Artist", SongSortOrder.ARTIST),
-                                Pair("By File Size", SongSortOrder.FILE_SIZE),
-                                Pair("By Duration", SongSortOrder.DURATION)
-                            ).forEach { (label, order) ->
-                                GlassDropdownMenuItem(
-                                    text = label,
-                                    isSelected = manager.currentSortOrder == order,
-                                    manager = manager,
-                                    onClick = {
-                                        manager.setPersistentSongSort(order)
-                                        showSortMenu = false
-                                    }
-                                )
+                            GlassmorphicDropdownMenu(
+                                expanded = showSortMenu,
+                                onDismissRequest = { showSortMenu = false },
+                                manager = manager
+                            ) {
+                                listOf(
+                                    Pair("A to Z", SongSortOrder.A_TO_Z),
+                                    Pair("Z to A", SongSortOrder.Z_TO_A),
+                                    Pair("Newest First", SongSortOrder.NEWEST),
+                                    Pair("Oldest First", SongSortOrder.OLDEST),
+                                    Pair("By Artist", SongSortOrder.ARTIST),
+                                    Pair("By File Size", SongSortOrder.FILE_SIZE),
+                                    Pair("By Duration", SongSortOrder.DURATION)
+                                ).forEach { (label, order) ->
+                                    GlassDropdownMenuItem(
+                                        text = label,
+                                        isSelected = manager.currentSortOrder == order,
+                                        manager = manager,
+                                        onClick = {
+                                            manager.setPersistentSongSort(order)
+                                            showSortMenu = false
+                                        }
+                                    )
+                                }
                             }
                         }
-                    }
 
                         Spacer(modifier = Modifier.width(6.dp))
 
@@ -2116,7 +2102,6 @@ fun LibraryScreen(
         }
     }
 }
-
 // =========================================================================
 // 📌 PLAYLIST DETAIL SCREEN
 // =========================================================================
@@ -2131,13 +2116,13 @@ fun PlaylistDetailScreen(
     onSongMenuClick: (Song) -> Unit,
     onSongClick: (Song, List<Song>) -> Unit,
     onFolderClick: (String) -> Unit,
-    onOpenGridSizeDialog: () -> Unit = {}
+    onOpenGridSizeDialog: () -> Unit = {},
+    onOpenAddSongsDialog: () -> Unit = {}
 ) {
     val textColor = manager.getCurrentTextColor()
     val cardBg = manager.getCurrentSurfaceColor()
     val glassBorderBrush = manager.getGlassBorderBrush()
     val accent = manager.accentColor
-    var showAddSongsSearchPicker by remember { mutableStateOf(false) }
     var showSortMenu by remember { mutableStateOf(false) }
 
     val songLookup = remember(manager.allSongs.size) { manager.allSongs.associateBy { it.id } }
@@ -2157,17 +2142,11 @@ fun PlaylistDetailScreen(
         }.toImmutableList()
     }
 
-    val animatedPlaylistBlur by animateDpAsState(
-        targetValue = if (showAddSongsSearchPicker) 28.dp else 0.dp,
-        animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing),
-        label = "playlistBlurAnim"
-    )
-
+    // ⚡ Local blur removed to eliminate double blur stacking over root blur
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .blur(animatedPlaylistBlur)
                 .padding(horizontal = 16.dp)
         ) {
             Row(
@@ -2248,7 +2227,7 @@ fun PlaylistDetailScreen(
                             .clip(CircleShape)
                             .background(cardBg)
                             .border(1.2.dp, glassBorderBrush, CircleShape)
-                            .clickable { showAddSongsSearchPicker = true },
+                            .clickable { onOpenAddSongsDialog() }, // 👈 Clean root-level modal trigger
                         contentAlignment = Alignment.Center
                     ) {
                         AddTrackActionVector(tint = accent, modifier = Modifier.size(18.dp))
@@ -2359,20 +2338,6 @@ fun PlaylistDetailScreen(
                     }
                 }
             }
-        }
-    }
-
-    if (showAddSongsSearchPicker) {
-        Box(modifier = Modifier.zIndex(999f)) {
-            PlaylistAddSearchDialog(
-                playlist = playlist,
-                manager = manager,
-                onDismiss = { showAddSongsSearchPicker = false },
-                onNavigateToFolder = { folder ->
-                    showAddSongsSearchPicker = false
-                    onFolderClick(folder)
-                }
-            )
         }
     }
 }
@@ -2600,7 +2565,7 @@ fun FolderSongsScreen(
 }
 
 // =========================================================================
-// 📌 MANAGE PLAYLISTS DIALOG
+// 📌 MANAGE PLAYLISTS DIALOG (With 120Hz Floating Drag & Edge Auto-Scroll)
 // =========================================================================
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -3463,6 +3428,7 @@ fun GridSizeDialog(
     }
 }
 
+// ArrangePlaylistsDialog
 @Composable
 fun ArrangePlaylistsDialog(
     manager: MusicManager,
