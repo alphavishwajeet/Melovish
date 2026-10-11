@@ -33,6 +33,7 @@ import android.provider.Settings
 import android.util.LruCache
 import android.view.HapticFeedbackConstants
 import android.widget.Toast
+import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.IntentSenderRequest
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -112,12 +113,16 @@ class MusicManager(val context: Context) {
     private var attachedActivity: MainActivity? = null
     private var pendingStorageWrite: PendingTagWrite? = null
 
+    // Activity Result Launcher for scoped storage write operations
+    var writeRequestLauncher: ActivityResultLauncher<IntentSenderRequest>? = null
+
     fun attachActivity(activity: MainActivity) {
         attachedActivity = activity
     }
 
     fun detachActivity() {
         attachedActivity = null
+        writeRequestLauncher = null
     }
 
     private val exceptionHandler = CoroutineExceptionHandler { _, throwable ->
@@ -2202,8 +2207,11 @@ class MusicManager(val context: Context) {
                 )
                 val intentSenderRequest = IntentSenderRequest.Builder(writePendingIntent.intentSender).build()
                 val act = attachedActivity
-                if (act != null) {
-                    act.writeRequestLauncher.launch(intentSenderRequest)
+                val launcher = writeRequestLauncher
+                if (launcher != null) {
+                    launcher.launch(intentSenderRequest)
+                } else if (act != null) {
+                    executePendingStorageWrite()
                 } else {
                     executePendingStorageWrite()
                 }

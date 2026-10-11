@@ -15,6 +15,7 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.animation.AnimatedVisibility
@@ -69,6 +70,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -156,6 +158,12 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
 import java.util.Locale
+import kotlin.math.abs
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.roundToInt
+import kotlin.math.sin
+import kotlin.math.sqrt
 
 // =========================================================================
 // 📌 CUSTOM VECTOR ICONS
@@ -763,7 +771,7 @@ fun MelovishRootApp(manager: MusicManager) {
                 }
             }
 
-            // Status Bar Overlay Header: Hides cleanly during modals to prevent double/unblurred blur seams
+            // Status Bar Overlay Header: Automatically hides during modals to eliminate the double blur / unblurred line
             if (!isAnyRootModalOpen) {
                 Box(
                     modifier = Modifier
@@ -1538,266 +1546,266 @@ fun HomeScreen(
                                     .background(cardBg)
                                     .border(1.2.dp, glassBorderBrush, CircleShape)
                                     .clickable { showSortMenu = true },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                SortListVector(tint = accent, modifier = Modifier.size(18.dp))
-                            }
-
-                            GlassmorphicDropdownMenu(
-                                expanded = showSortMenu,
-                                onDismissRequest = { showSortMenu = false },
-                                manager = manager
-                            ) {
-                                listOf(
-                                    Pair("A to Z", SongSortOrder.A_TO_Z),
-                                    Pair("Z to A", SongSortOrder.Z_TO_A),
-                                    Pair("Newest First", SongSortOrder.NEWEST),
-                                    Pair("Oldest First", SongSortOrder.OLDEST),
-                                    Pair("By Artist", SongSortOrder.ARTIST),
-                                    Pair("By File Size", SongSortOrder.FILE_SIZE),
-                                    Pair("By Duration", SongSortOrder.DURATION)
-                                ).forEach { (label, order) ->
-                                    GlassDropdownMenuItem(
-                                        text = label,
-                                        isSelected = manager.currentSortOrder == order,
-                                        manager = manager,
-                                        onClick = {
-                                            manager.setPersistentSongSort(order)
-                                            showSortMenu = false
-                                        }
-                                    )
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.width(6.dp))
-
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(CircleShape)
-                                .background(cardBg)
-                                .border(1.2.dp, glassBorderBrush, CircleShape)
-                                .clickable {
-                                    val shuffled = sortedSongs.shuffled()
-                                    if (shuffled.isNotEmpty()) {
-                                        manager.triggerHapticFeedback(true)
-                                        onSongClick(shuffled.first(), shuffled)
-                                    }
-                                },
                             contentAlignment = Alignment.Center
                         ) {
-                            ShuffleActionVector(tint = accent, modifier = Modifier.size(20.dp))
+                            SortListVector(tint = accent, modifier = Modifier.size(18.dp))
                         }
-                    }
-                }
-            }
 
-            if (showSkeleton) {
-                when (manager.homeViewMode) {
-                    GridViewMode.LIST -> items(8) { ShimmerSkeletonRow(isDark = isDark) }
-                    GridViewMode.GRID_2 -> items(4) {
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Box(modifier = Modifier.weight(1f)) { ShimmerSkeletonGridItem(aspectRatio = 1f, isDark = isDark) }
-                            Box(modifier = Modifier.weight(1f)) { ShimmerSkeletonGridItem(aspectRatio = 1f, isDark = isDark) }
-                        }
-                    }
-                    GridViewMode.GRID_3 -> items(4) {
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            for (i in 0 until 3) {
-                                Box(modifier = Modifier.weight(1f)) { ShimmerSkeletonGridItem(aspectRatio = 1f, isDark = isDark) }
+                        GlassmorphicDropdownMenu(
+                            expanded = showSortMenu,
+                            onDismissRequest = { showSortMenu = false },
+                            manager = manager
+                        ) {
+                            listOf(
+                                Pair("A to Z", SongSortOrder.A_TO_Z),
+                                Pair("Z to A", SongSortOrder.Z_TO_A),
+                                Pair("Newest First", SongSortOrder.NEWEST),
+                                Pair("Oldest First", SongSortOrder.OLDEST),
+                                Pair("By Artist", SongSortOrder.ARTIST),
+                                Pair("By File Size", SongSortOrder.FILE_SIZE),
+                                Pair("By Duration", SongSortOrder.DURATION)
+                            ).forEach { (label, order) ->
+                                GlassDropdownMenuItem(
+                                    text = label,
+                                    isSelected = manager.currentSortOrder == order,
+                                    manager = manager,
+                                    onClick = {
+                                        manager.setPersistentSongSort(order)
+                                        showSortMenu = false
+                                    }
+                                )
                             }
                         }
                     }
-                    GridViewMode.GRID_4 -> items(4) {
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            for (i in 0 until 4) {
-                                Box(modifier = Modifier.weight(1f)) { ShimmerSkeletonGridItem(aspectRatio = 1f, isDark = isDark) }
-                            }
-                        }
-                    }
-                    GridViewMode.HERO_GRID -> items(3) {
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Box(modifier = Modifier.weight(1f)) { ShimmerSkeletonGridItem(aspectRatio = 1f, isDark = isDark, isHero = true) }
-                            Box(modifier = Modifier.weight(1f)) { ShimmerSkeletonGridItem(aspectRatio = 1f, isDark = isDark, isHero = true) }
-                        }
-                    }
-                }
-            } else if (sortedSongs.isEmpty()) {
-                item(key = "home_empty_state", contentType = "empty_state") {
+
+                    Spacer(modifier = Modifier.width(6.dp))
+
                     Box(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 32.dp)
-                            .clip(RoundedCornerShape(20.dp))
+                            .size(36.dp)
+                            .clip(CircleShape)
                             .background(cardBg)
-                            .border(1.2.dp, glassBorderBrush, RoundedCornerShape(20.dp))
-                            .padding(28.dp),
+                            .border(1.2.dp, glassBorderBrush, CircleShape)
+                            .clickable {
+                                val shuffled = sortedSongs.shuffled()
+                                if (shuffled.isNotEmpty()) {
+                                    manager.triggerHapticFeedback(true)
+                                    onSongClick(shuffled.first(), shuffled)
+                                }
+                            },
                         contentAlignment = Alignment.Center
                     ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
-                        ) {
-                            Text(text = "🎵", fontSize = 42.sp)
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Text(
-                                text = "No Audio Files Found",
-                                color = textColor,
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Text(
-                                text = "Add MP3 or audio files to your device storage to see them here.",
-                                color = Color(0xFF64748B),
-                                fontSize = 13.sp,
-                                textAlign = TextAlign.Center
-                            )
-                        }
-                    }
-                }
-            } else {
-                when (manager.homeViewMode) {
-                    GridViewMode.LIST -> {
-                        items(
-                            items = sortedSongs,
-                            key = { it.id },
-                            contentType = { "home_song_row" }
-                        ) { song ->
-                            UniversalSongRow(
-                                song = song,
-                                manager = manager,
-                                isDark = isDark,
-                                onPlay = { onSongClick(song, sortedSongs) },
-                                onMenuClick = { onSongMenuClick(song) }
-                            )
-                        }
-                    }
-                    GridViewMode.GRID_2 -> {
-                        items(
-                            items = chunkedGrid2,
-                            key = { it.first().id }
-                        ) { rowSongs ->
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                rowSongs.forEach { song ->
-                                    Box(modifier = Modifier.weight(1f)) {
-                                        SquareAlbumOverlayCard(
-                                            song = song,
-                                            manager = manager,
-                                            isDark = isDark,
-                                            onPlay = { onSongClick(song, sortedSongs) },
-                                            onMenuClick = { onSongMenuClick(song) }
-                                        )
-                                    }
-                                }
-                                if (rowSongs.size == 1) Spacer(modifier = Modifier.weight(1f))
-                            }
-                        }
-                    }
-                    GridViewMode.GRID_3 -> {
-                        items(
-                            items = chunkedGrid3,
-                            key = { it.first().id }
-                        ) { rowSongs ->
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                rowSongs.forEach { song ->
-                                    Box(modifier = Modifier.weight(1f)) {
-                                        SquareAlbumOverlayCard(
-                                            song = song,
-                                            manager = manager,
-                                            isDark = isDark,
-                                            onPlay = { onSongClick(song, sortedSongs) },
-                                            onMenuClick = { onSongMenuClick(song) }
-                                        )
-                                    }
-                                }
-                                for (i in rowSongs.size until 3) Spacer(modifier = Modifier.weight(1f))
-                            }
-                        }
-                    }
-                    GridViewMode.GRID_4 -> {
-                        items(
-                            items = chunkedGrid4,
-                            key = { it.first().id }
-                        ) { rowSongs ->
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                rowSongs.forEach { song ->
-                                    Box(modifier = Modifier.weight(1f)) {
-                                        SquareAlbumOverlayCard(
-                                            song = song,
-                                            manager = manager,
-                                            isDark = isDark,
-                                            onPlay = { onSongClick(song, sortedSongs) },
-                                            onMenuClick = { onSongMenuClick(song) }
-                                        )
-                                    }
-                                }
-                                for (i in rowSongs.size until 4) Spacer(modifier = Modifier.weight(1f))
-                            }
-                        }
-                    }
-                    GridViewMode.HERO_GRID -> {
-                        items(
-                            items = chunkedGrid2,
-                            key = { it.first().id }
-                        ) { rowSongs ->
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                rowSongs.forEach { song ->
-                                    Box(modifier = Modifier.weight(1f)) {
-                                        HeroAlbumCard(
-                                            song = song,
-                                            manager = manager,
-                                            isDark = isDark,
-                                            onPlay = { onSongClick(song, sortedSongs) },
-                                            onMenuClick = { onSongMenuClick(song) }
-                                        )
-                                    }
-                                }
-                                if (rowSongs.size == 1) Spacer(modifier = Modifier.weight(1f))
-                            }
-                        }
+                        ShuffleActionVector(tint = accent, modifier = Modifier.size(20.dp))
                     }
                 }
             }
         }
 
-        if (manager.currentSong == null && !showSkeleton && sortedSongs.isNotEmpty()) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(bottom = 18.dp, end = 18.dp)
-                    .size(58.dp)
-                    .shadow(
-                        elevation = 8.dp,
-                        shape = CircleShape,
-                        spotColor = manager.accentColor
-                    )
-                    .clip(CircleShape)
-                    .background(manager.accentColor)
-                    .border(1.5.dp, Color.White.copy(alpha = 0.35f), CircleShape)
-                    .clickable {
-                        manager.triggerHapticFeedback(true)
-                        onResumeClick()
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                Canvas(
-                    modifier = Modifier
-                        .size(24.dp)
-                        .offset(x = 1.5.dp)
-                ) {
-                    val path = Path().apply {
-                        moveTo(size.width * 0.18f, size.height * 0.12f)
-                        lineTo(size.width * 0.88f, size.height * 0.50f)
-                        lineTo(size.width * 0.18f, size.height * 0.88f)
-                        close()
+        if (showSkeleton) {
+            when (manager.homeViewMode) {
+                GridViewMode.LIST -> items(8) { ShimmerSkeletonRow(isDark = isDark) }
+                GridViewMode.GRID_2 -> items(4) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Box(modifier = Modifier.weight(1f)) { ShimmerSkeletonGridItem(aspectRatio = 1f, isDark = isDark) }
+                        Box(modifier = Modifier.weight(1f)) { ShimmerSkeletonGridItem(aspectRatio = 1f, isDark = isDark) }
                     }
-                    drawPath(path, color = Color.White)
+                }
+                GridViewMode.GRID_3 -> items(4) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        for (i in 0 until 3) {
+                            Box(modifier = Modifier.weight(1f)) { ShimmerSkeletonGridItem(aspectRatio = 1f, isDark = isDark) }
+                        }
+                    }
+                }
+                GridViewMode.GRID_4 -> items(4) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        for (i in 0 until 4) {
+                            Box(modifier = Modifier.weight(1f)) { ShimmerSkeletonGridItem(aspectRatio = 1f, isDark = isDark) }
+                        }
+                    }
+                }
+                GridViewMode.HERO_GRID -> items(3) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Box(modifier = Modifier.weight(1f)) { ShimmerSkeletonGridItem(aspectRatio = 1f, isDark = isDark, isHero = true) }
+                        Box(modifier = Modifier.weight(1f)) { ShimmerSkeletonGridItem(aspectRatio = 1f, isDark = isDark, isHero = true) }
+                    }
+                }
+            }
+        } else if (sortedSongs.isEmpty()) {
+            item(key = "home_empty_state", contentType = "empty_state") {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 32.dp)
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(cardBg)
+                        .border(1.2.dp, glassBorderBrush, RoundedCornerShape(20.dp))
+                        .padding(28.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Text(text = "🎵", fontSize = 42.sp)
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = "No Audio Files Found",
+                            color = textColor,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "Add MP3 or audio files to your device storage to see them here.",
+                            color = Color(0xFF64748B),
+                            fontSize = 13.sp,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+            }
+        } else {
+            when (manager.homeViewMode) {
+                GridViewMode.LIST -> {
+                    items(
+                        items = sortedSongs,
+                        key = { it.id },
+                        contentType = { "home_song_row" }
+                    ) { song ->
+                        UniversalSongRow(
+                            song = song,
+                            manager = manager,
+                            isDark = isDark,
+                            onPlay = { onSongClick(song, sortedSongs) },
+                            onMenuClick = { onSongMenuClick(song) }
+                        )
+                    }
+                }
+                GridViewMode.GRID_2 -> {
+                    items(
+                        items = chunkedGrid2,
+                        key = { it.first().id }
+                    ) { rowSongs ->
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            rowSongs.forEach { song ->
+                                Box(modifier = Modifier.weight(1f)) {
+                                    SquareAlbumOverlayCard(
+                                        song = song,
+                                        manager = manager,
+                                        isDark = isDark,
+                                        onPlay = { onSongClick(song, sortedSongs) },
+                                        onMenuClick = { onSongMenuClick(song) }
+                                    )
+                                }
+                            }
+                            if (rowSongs.size == 1) Spacer(modifier = Modifier.weight(1f))
+                        }
+                    }
+                }
+                GridViewMode.GRID_3 -> {
+                    items(
+                        items = chunkedGrid3,
+                        key = { it.first().id }
+                    ) { rowSongs ->
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            rowSongs.forEach { song ->
+                                Box(modifier = Modifier.weight(1f)) {
+                                    SquareAlbumOverlayCard(
+                                        song = song,
+                                        manager = manager,
+                                        isDark = isDark,
+                                        onPlay = { onSongClick(song, sortedSongs) },
+                                        onMenuClick = { onSongMenuClick(song) }
+                                    )
+                                }
+                            }
+                            for (i in rowSongs.size until 3) Spacer(modifier = Modifier.weight(1f))
+                        }
+                    }
+                }
+                GridViewMode.GRID_4 -> {
+                    items(
+                        items = chunkedGrid4,
+                        key = { it.first().id }
+                    ) { rowSongs ->
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            rowSongs.forEach { song ->
+                                Box(modifier = Modifier.weight(1f)) {
+                                    SquareAlbumOverlayCard(
+                                        song = song,
+                                        manager = manager,
+                                        isDark = isDark,
+                                        onPlay = { onSongClick(song, sortedSongs) },
+                                        onMenuClick = { onSongMenuClick(song) }
+                                    )
+                                }
+                            }
+                            for (i in rowSongs.size until 4) Spacer(modifier = Modifier.weight(1f))
+                        }
+                    }
+                }
+                GridViewMode.HERO_GRID -> {
+                    items(
+                        items = chunkedGrid2,
+                        key = { it.first().id }
+                    ) { rowSongs ->
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            rowSongs.forEach { song ->
+                                Box(modifier = Modifier.weight(1f)) {
+                                    HeroAlbumCard(
+                                        song = song,
+                                        manager = manager,
+                                        isDark = isDark,
+                                        onPlay = { onSongClick(song, sortedSongs) },
+                                        onMenuClick = { onSongMenuClick(song) }
+                                    )
+                                }
+                            }
+                            if (rowSongs.size == 1) Spacer(modifier = Modifier.weight(1f))
+                        }
+                    }
                 }
             }
         }
     }
+
+    if (manager.currentSong == null && !showSkeleton && sortedSongs.isNotEmpty()) {
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(bottom = 18.dp, end = 18.dp)
+                .size(58.dp)
+                .shadow(
+                    elevation = 8.dp,
+                    shape = CircleShape,
+                    spotColor = manager.accentColor
+                )
+                .clip(CircleShape)
+                .background(manager.accentColor)
+                .border(1.5.dp, Color.White.copy(alpha = 0.35f), CircleShape)
+                .clickable {
+                    manager.triggerHapticFeedback(true)
+                    onResumeClick()
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            Canvas(
+                modifier = Modifier
+                    .size(24.dp)
+                    .offset(x = 1.5.dp)
+            ) {
+                val path = Path().apply {
+                    moveTo(size.width * 0.18f, size.height * 0.12f)
+                    lineTo(size.width * 0.88f, size.height * 0.50f)
+                    lineTo(size.width * 0.18f, size.height * 0.88f)
+                    close()
+                }
+                drawPath(path, color = Color.White)
+            }
+        }
+    }
+}
 }
 
 // =========================================================================
