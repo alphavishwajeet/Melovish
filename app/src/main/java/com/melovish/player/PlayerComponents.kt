@@ -155,7 +155,6 @@ fun GlassmorphicDropdownMenu(
     val dialogColor = manager.getCurrentDialogColor()
     val menuCornerShape = RoundedCornerShape(18.dp)
 
-    // Diffusion scrim synced directly with the slider setting
     val baseScrimAlpha = (0.75f + (manager.frostedGlassOpacity * 0.22f)).coerceIn(0.68f, 0.98f)
     val diffusionUnderlay = if (isDark) {
         Color(0xFF0F172A).copy(alpha = baseScrimAlpha)

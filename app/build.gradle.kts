@@ -37,7 +37,6 @@ android {
         variant.outputs
             .map { it as com.android.build.gradle.internal.api.BaseVariantOutputImpl }
             .forEach { output ->
-                // Uses the clean base versionName from defaultConfig to prevent duplicate "-DEBUG-debug"
                 val baseVersion = defaultConfig.versionName
                 val bType = variant.buildType.name
                 output.outputFileName = "Melovish-v${baseVersion}-${bType}.apk"
@@ -60,14 +59,19 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
-            isShrinkResources = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
             signingConfig = signingConfigs.getByName("release")
         }
         debug {
             isMinifyEnabled = false
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-DEBUG"
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 
@@ -81,7 +85,8 @@ android {
         freeCompilerArgs += listOf(
             "-opt-in=androidx.compose.material3.ExperimentalMaterial3Api",
             "-opt-in=androidx.compose.foundation.ExperimentalFoundationApi",
-            "-opt-in=androidx.media3.common.util.UnstableApi"
+            "-opt-in=androidx.media3.common.util.UnstableApi",
+            "-Xbackend-threads=0"
         )
     }
 
@@ -94,7 +99,10 @@ android {
             excludes += setOf(
                 "/META-INF/{AL2.0,LGPL2.1}",
                 "/META-INF/INDEX.LIST",
-                "/META-INF/DEPENDENCIES"
+                "/META-INF/DEPENDENCIES",
+                "/META-INF/LICENSE.md",
+                "/META-INF/LICENSE-notice.md",
+                "/META-INF/NOTICE.md"
             )
         }
     }

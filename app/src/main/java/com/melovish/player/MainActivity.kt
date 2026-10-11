@@ -458,7 +458,6 @@ fun MelovishRootApp(manager: MusicManager) {
     var isSettingsEqOpen by remember { mutableStateOf(false) }
     var isMiniPlayerDismissed by remember { mutableStateOf(false) }
 
-    // 🚀 Reactive search keyboard trigger
     var focusSearchTrigger by remember { mutableLongStateOf(0L) }
 
     val handleSmartSongClick: (Song, List<Song>, String) -> Unit = { song, list, source ->
@@ -517,7 +516,6 @@ fun MelovishRootApp(manager: MusicManager) {
             isSettingsEqOpen || activeSongForMenu != null || activeTagEditSong != null || activeAddToPlaylistSong != null ||
             activeSongInfo != null
 
-    // 🚀 RESPONSIVE COLLAPSING/EXPANDING TOP BAR CONNECTION
     val topBarNestedScrollConnection = remember(isMainTabScreen, isAnyRootModalOpen) {
         object : NestedScrollConnection {
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
@@ -780,7 +778,6 @@ fun MelovishRootApp(manager: MusicManager) {
                 }
             }
 
-            // 🚀 MiniPlayer automatically hides when any dialog opens, placed below modals (zIndex 10f)
             if (manager.currentSong != null && !isPlayerExpanded && !isMiniPlayerDismissed && !isAnyRootModalOpen) {
                 Box(
                     modifier = Modifier
@@ -814,7 +811,6 @@ fun MelovishRootApp(manager: MusicManager) {
                 )
             }
 
-            // 🚀 Modal Scrim placed at zIndex(100f) strictly above the MiniPlayer
             AnimatedVisibility(
                 visible = isAnyRootModalOpen,
                 enter = fadeIn(tween(250)),
@@ -1324,7 +1320,7 @@ fun MelovishRootApp(manager: MusicManager) {
 }
 
 // =========================================================================
-// 📌 HOME SCREEN (Optimized for Fast Flinging & Zero-Stutter Lazy Lists)
+// 📌 HOME SCREEN (Zero-Allocation Memoized 120Hz Fast-Fling Lists)
 // =========================================================================
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -1556,38 +1552,37 @@ fun HomeScreen(
                                     .background(cardBg)
                                     .border(1.2.dp, glassBorderBrush, CircleShape)
                                     .clickable { showSortMenu = true },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                SortListVector(tint = accent, modifier = Modifier.size(18.dp))
-                            }
+                            contentAlignment = Alignment.Center
+                        ) {
+                            SortListVector(tint = accent, modifier = Modifier.size(18.dp))
+                        }
 
-                            // ⚡ Frosted Glassmorphic Dropdown Menu
-                            GlassmorphicDropdownMenu(
-                                expanded = showSortMenu,
-                                onDismissRequest = { showSortMenu = false },
-                                manager = manager
-                            ) {
-                                listOf(
-                                    Pair("A to Z", SongSortOrder.A_TO_Z),
-                                    Pair("Z to A", SongSortOrder.Z_TO_A),
-                                    Pair("Newest First", SongSortOrder.NEWEST),
-                                    Pair("Oldest First", SongSortOrder.OLDEST),
-                                    Pair("By Artist", SongSortOrder.ARTIST),
-                                    Pair("By File Size", SongSortOrder.FILE_SIZE),
-                                    Pair("By Duration", SongSortOrder.DURATION)
-                                ).forEach { (label, order) ->
-                                    GlassDropdownMenuItem(
-                                        text = label,
-                                        isSelected = manager.currentSortOrder == order,
-                                        manager = manager,
-                                        onClick = {
-                                            manager.setPersistentSongSort(order)
-                                            showSortMenu = false
-                                        }
-                                    )
-                                }
+                        GlassmorphicDropdownMenu(
+                            expanded = showSortMenu,
+                            onDismissRequest = { showSortMenu = false },
+                            manager = manager
+                        ) {
+                            listOf(
+                                Pair("A to Z", SongSortOrder.A_TO_Z),
+                                Pair("Z to A", SongSortOrder.Z_TO_A),
+                                Pair("Newest First", SongSortOrder.NEWEST),
+                                Pair("Oldest First", SongSortOrder.OLDEST),
+                                Pair("By Artist", SongSortOrder.ARTIST),
+                                Pair("By File Size", SongSortOrder.FILE_SIZE),
+                                Pair("By Duration", SongSortOrder.DURATION)
+                            ).forEach { (label, order) ->
+                                GlassDropdownMenuItem(
+                                    text = label,
+                                    isSelected = manager.currentSortOrder == order,
+                                    manager = manager,
+                                    onClick = {
+                                        manager.setPersistentSongSort(order)
+                                        showSortMenu = false
+                                    }
+                                )
                             }
                         }
+                    }
 
                         Spacer(modifier = Modifier.width(6.dp))
 
@@ -1888,7 +1883,6 @@ fun LibraryScreen(
                             SortListVector(tint = accent, modifier = Modifier.size(18.dp))
                         }
 
-                        // ⚡ Frosted Glassmorphic Dropdown Menu
                         GlassmorphicDropdownMenu(
                             expanded = showFolderSortMenu,
                             onDismissRequest = { showFolderSortMenu = false },
@@ -2604,7 +2598,7 @@ fun FolderSongsScreen(
 }
 
 // =========================================================================
-// 📌 MANAGE PLAYLISTS DIALOG
+// 📌 MANAGE PLAYLISTS DIALOG (With 120Hz Floating Drag & Edge Auto-Scroll)
 // =========================================================================
 
 @OptIn(ExperimentalFoundationApi::class)

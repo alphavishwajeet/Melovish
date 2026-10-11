@@ -110,6 +110,7 @@ import coil.request.ImageRequest
 import coil.size.Precision
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.toImmutableList
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -155,7 +156,9 @@ object ArtistDataManager {
             try {
                 val obj = JSONObject(aliasJson)
                 obj.keys().forEach { artistAliases[it] = obj.getString(it) }
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+            }
         }
 
         manuallyCreatedArtists.clear()
@@ -166,7 +169,9 @@ object ArtistDataManager {
                 for (i in 0 until arr.length()) {
                     manuallyCreatedArtists.add(arr.getString(i))
                 }
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+            }
         }
 
         removedSongMap.clear()
@@ -180,7 +185,9 @@ object ArtistDataManager {
                     for (i in 0 until arr.length()) list.add(arr.getLong(i))
                     removedSongMap[key] = list
                 }
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+            }
         }
 
         movedSongMap.clear()
@@ -194,7 +201,9 @@ object ArtistDataManager {
                     for (i in 0 until arr.length()) list.add(arr.getLong(i))
                     movedSongMap[key] = list
                 }
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+            }
         }
 
         customArtistImages.clear()
@@ -203,46 +212,52 @@ object ArtistDataManager {
             try {
                 val obj = JSONObject(imgJson)
                 obj.keys().forEach { customArtistImages[it] = obj.getString(it) }
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+            }
         }
     }
 
     fun saveData() {
         val p = prefs ?: return
-        val aliasObj = JSONObject()
-        artistAliases.forEach { (k, v) -> aliasObj.put(k, v) }
+        try {
+            val aliasObj = JSONObject()
+            artistAliases.forEach { (k, v) -> aliasObj.put(k, v) }
 
-        val customArr = JSONArray()
-        manuallyCreatedArtists.forEach { customArr.put(it) }
+            val customArr = JSONArray()
+            manuallyCreatedArtists.forEach { customArr.put(it) }
 
-        val remObj = JSONObject()
-        removedSongMap.forEach { (k, v) ->
-            val arr = JSONArray()
-            v.forEach { arr.put(it) }
-            remObj.put(k, arr)
+            val remObj = JSONObject()
+            removedSongMap.forEach { (k, v) ->
+                val arr = JSONArray()
+                v.forEach { arr.put(it) }
+                remObj.put(k, arr)
+            }
+
+            val movObj = JSONObject()
+            movedSongMap.forEach { (k, v) ->
+                val arr = JSONArray()
+                v.forEach { arr.put(it) }
+                movObj.put(k, arr)
+            }
+
+            val imgObj = JSONObject()
+            customArtistImages.forEach { (k, v) -> imgObj.put(k, v) }
+
+            p.edit()
+                .putStringSet("hidden_artists", hiddenArtists.toSet())
+                .putStringSet("pinned_artists", pinnedArtists.toSet())
+                .putString("artist_aliases", aliasObj.toString())
+                .putString("custom_artists", customArr.toString())
+                .putString("removed_songs_map", remObj.toString())
+                .putString("moved_songs_map", movObj.toString())
+                .putString("custom_artist_images", imgObj.toString())
+                .apply()
+
+            refreshTrigger++
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
         }
-
-        val movObj = JSONObject()
-        movedSongMap.forEach { (k, v) ->
-            val arr = JSONArray()
-            v.forEach { arr.put(it) }
-            movObj.put(k, arr)
-        }
-
-        val imgObj = JSONObject()
-        customArtistImages.forEach { (k, v) -> imgObj.put(k, v) }
-
-        p.edit()
-            .putStringSet("hidden_artists", hiddenArtists.toSet())
-            .putStringSet("pinned_artists", pinnedArtists.toSet())
-            .putString("artist_aliases", aliasObj.toString())
-            .putString("custom_artists", customArr.toString())
-            .putString("removed_songs_map", remObj.toString())
-            .putString("moved_songs_map", movObj.toString())
-            .putString("custom_artist_images", imgObj.toString())
-            .commit()
-
-        refreshTrigger++
     }
 
     fun togglePinArtist(name: String) {
@@ -278,7 +293,9 @@ object ArtistDataManager {
             output.close()
             customArtistImages[artistName] = targetFile.absolutePath
             saveData()
-        } catch (_: Exception) {}
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+        }
     }
 
     fun createNewArtist(name: String, initialSongs: List<Song> = emptyList()) {
@@ -901,7 +918,6 @@ fun ArtistsScreen(
     var isSearchFieldVisible by remember { mutableStateOf(false) }
     var showSortMenu by remember { mutableStateOf(false) }
 
-    // Instant read: precomputed in background
     val artistsList = manager.parsedArtistsList
 
     val sortedArtists: ImmutableList<ArtistItem> = remember(artistsList.size, artistsList.toList(), query, manager.artistsSortOrder, ArtistDataManager.refreshTrigger) {
