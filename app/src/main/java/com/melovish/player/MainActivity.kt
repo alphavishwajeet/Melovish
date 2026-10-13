@@ -485,6 +485,7 @@ fun MelovishRootApp(manager: MusicManager) {
 
     val homeListState = rememberLazyListState()
     val libraryListState = rememberLazyListState()
+    val libraryGridState = rememberLazyGridState()
     val artistsListState = rememberLazyListState()
     val artistsGridState = rememberLazyGridState()
     val searchListState = rememberLazyListState()
@@ -703,6 +704,7 @@ fun MelovishRootApp(manager: MusicManager) {
                         activeScreen == "library" -> LibraryScreen(
                             manager = manager,
                             listState = libraryListState,
+                            gridState = libraryGridState,
                             onFolderClick = { folder: String -> selectedFolder = folder },
                             onFolderLongClick = { folder: String -> rootCustomizingFolder = folder },
                             onOpenGridSizeDialog = { showRootGridSizeDialog = true }
@@ -739,7 +741,10 @@ fun MelovishRootApp(manager: MusicManager) {
                                     isTopBarVisible = true
                                     when (tab) {
                                         "home" -> homeListState.animateScrollToItem(0)
-                                        "library" -> libraryListState.animateScrollToItem(0)
+                                        "library" -> {
+                                            launch { libraryListState.animateScrollToItem(0) }
+                                            launch { libraryGridState.animateScrollToItem(0) }
+                                        }
                                         "artists" -> {
                                             launch { artistsListState.animateScrollToItem(0) }
                                             launch { artistsGridState.animateScrollToItem(0) }
@@ -1809,7 +1814,7 @@ fun HomeScreen(
 }
 
 // =========================================================================
-// 📌 LIBRARY SCREEN
+// 📌 LIBRARY SCREEN (With Persistent Scroll Position across List & Grids)
 // =========================================================================
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -1818,6 +1823,7 @@ fun HomeScreen(
 fun LibraryScreen(
     manager: MusicManager,
     listState: LazyListState,
+    gridState: LazyGridState,
     onFolderClick: (String) -> Unit,
     onFolderLongClick: (String) -> Unit,
     onOpenGridSizeDialog: () -> Unit = {}
@@ -1975,6 +1981,7 @@ fun LibraryScreen(
                     }
                     GridViewMode.GRID_2 -> {
                         LazyVerticalGrid(
+                            state = gridState,
                             columns = GridCells.Fixed(2),
                             contentPadding = PaddingValues(bottom = 120.dp),
                             horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -2008,6 +2015,7 @@ fun LibraryScreen(
                     }
                     GridViewMode.GRID_3 -> {
                         LazyVerticalGrid(
+                            state = gridState,
                             columns = GridCells.Fixed(3),
                             contentPadding = PaddingValues(bottom = 120.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -2041,6 +2049,7 @@ fun LibraryScreen(
                     }
                     GridViewMode.GRID_4 -> {
                         LazyVerticalGrid(
+                            state = gridState,
                             columns = GridCells.Fixed(4),
                             contentPadding = PaddingValues(bottom = 120.dp),
                             horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -2074,6 +2083,7 @@ fun LibraryScreen(
                     }
                     GridViewMode.HERO_GRID -> {
                         LazyVerticalGrid(
+                            state = gridState,
                             columns = GridCells.Fixed(2),
                             contentPadding = PaddingValues(bottom = 120.dp),
                             horizontalArrangement = Arrangement.spacedBy(12.dp),

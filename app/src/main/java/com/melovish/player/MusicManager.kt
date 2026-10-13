@@ -11,6 +11,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.SharedPreferences
+import android.database.ContentObserver
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.media.AudioDeviceCallback
@@ -25,6 +26,8 @@ import android.media.audiofx.LoudnessEnhancer
 import android.media.audiofx.Virtualizer
 import android.net.Uri
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
@@ -259,6 +262,19 @@ class MusicManager(val context: Context) {
 
     var isScanningStorage by mutableStateOf(false)
     var isInitialLoading by mutableStateOf(true)
+
+    // Debounced automatic MediaStore real-time observation
+    private var mediaStoreObserverDebounceJob: Job? = null
+    private val mediaStoreObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
+        override fun onChange(selfChange: Boolean, uri: Uri?) {
+            super.onChange(selfChange, uri)
+            mediaStoreObserverDebounceJob?.cancel()
+            mediaStoreObserverDebounceJob = managerScope.launch {
+                delay(1000L)
+                scanStorage()
+            }
+        }
+    }
 
     val allSongs = mutableStateListOf<Song>()
     val rawStorageSongs = mutableStateListOf<Song>()
@@ -648,6 +664,18 @@ class MusicManager(val context: Context) {
         applyChannelMixing()
         registerAudioDeviceCallback()
         updateDeviceRoutingAndHighlight()
+
+        // Real-time automatic file change listener via MediaStore ContentObserver
+        try {
+            val audioUri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
+            } else {
+                MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+            }
+            context.contentResolver.registerContentObserver(audioUri, true, mediaStoreObserver)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
 
         AudioEffectsManager.onPlaybackSpeedChangeRequested = { speed, pitch ->
             try {
@@ -2420,7 +2448,7 @@ class MusicManager(val context: Context) {
         historySongs.addAll(
             allSongs.filter { it.lastPlayed > 0L }
                 .sortedByDescending { it.lastPlayed }
-                .take(300)
+                .take(999)
         )
     }
 
@@ -2442,7 +2470,7 @@ class MusicManager(val context: Context) {
     fun getMostPlayedSongs(): List<Song> {
         return allSongs.filter { it.playCount > 0 }
             .sortedByDescending { it.playCount }
-            .take(300)
+            .take(999)
     }
 
     fun savePermanentProfile(name: String, email: String, imageUri: Uri?) {
