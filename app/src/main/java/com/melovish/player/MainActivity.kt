@@ -4642,371 +4642,295 @@ fun SongInfoDialog(manager: MusicManager, song: Song, isDark: Boolean, onDismiss
 }
 
 // =========================================================================
-// 📌 TAG EDITOR DIALOG (With Created Date & Time and Direct Write Prompt)
+// 📌 BOTTOM NAVIGATION BAR
 // =========================================================================
 
 @Composable
-fun TagEditorDialog(manager: MusicManager, song: Song, onDismiss: () -> Unit) {
-    var title by remember { mutableStateOf(song.title) }
-    var artist by remember { mutableStateOf(song.artist) }
-    var album by remember { mutableStateOf(song.album) }
-
-    // Fallback: Use existing releaseDate, or read physical file last modified / creation time
-    val initialDateMillis = remember(song) {
-        val parsed = song.releaseDate.toLongOrNull()
-        if (parsed != null && parsed > 0L) {
-            parsed
-        } else {
-            val f = File(song.path)
-            if (f.exists()) f.lastModified() else System.currentTimeMillis()
-        }
-    }
-
-    var selectedDateMillis by remember { mutableLongStateOf(initialDateMillis) }
-    var customCoverUri by remember { mutableStateOf<Uri?>(null) }
-
-    val context = LocalContext.current
-    val isDark = manager.isDarkMode
-    val textColor = manager.getCurrentTextColor()
-    val accent = manager.accentColor
-    val dialogSurface = manager.getCurrentDialogColor()
+fun BottomNavBar(
+    manager: MusicManager,
+    activeTab: String,
+    onTabSelected: (tab: String, shouldFocusSearch: Boolean) -> Unit
+) {
+    val cardBg = manager.getCurrentSurfaceColor()
     val glassBorderBrush = manager.getGlassBorderBrush()
+    val accent = manager.accentColor
+    var lastSearchClickTimestamp by remember { mutableLongStateOf(0L) }
 
-    val imagePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        if (uri != null) {
-            customCoverUri = uri
-        }
-    }
-
-    val density = LocalDensity.current
-    val isImeVisible = WindowInsets.ime.getBottom(density) > 0
-    val bottomInsetPadding = if (isImeVisible) {
-        WindowInsets.ime.asPaddingValues().calculateBottomPadding()
-    } else {
-        WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-    }
-
-    val formattedCreatedDate = remember(selectedDateMillis) {
-        java.text.SimpleDateFormat("dd MMM yyyy, hh:mm a", Locale.getDefault()).format(java.util.Date(selectedDateMillis))
-    }
-
-    Box(
+    Row(
         modifier = Modifier
-            .fillMaxSize()
-            .zIndex(999f)
-            .background(Color(0x77000000))
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null
-            ) { onDismiss() },
-        contentAlignment = Alignment.BottomCenter
+            .fillMaxWidth()
+            .background(cardBg)
+            .border(1.2.dp, glassBorderBrush, RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
+            .padding(vertical = 10.dp),
+        horizontalArrangement = Arrangement.SpaceAround,
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .fillMaxHeight(0.85f)
-                .padding(bottom = bottomInsetPadding)
-                .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
-                .background(dialogSurface)
-                .border(1.5.dp, glassBorderBrush, RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
-                .clickable(enabled = false) {}
-                .padding(22.dp)
-        ) {
+        listOf(
+            Triple("home", "Home", "🏠"),
+            Triple("library", "Library", "📚"),
+            Triple("artists", "Artists", "🎙"),
+            Triple("search", "Search", "🔍")
+        ).forEach { (key, label, icon) ->
+            val isSel = activeTab == key
             Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState()),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    text = "Edit Audio Tags",
-                    color = textColor,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold
-                )
-                Spacer(modifier = Modifier.height(14.dp))
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable {
+                        if (key == "search") {
+                            val now = System.currentTimeMillis()
+                            val isDoubleClick = (now - lastSearchClickTimestamp) < 350L
+                            val isAlreadyOnSearch = (activeTab == "search")
+                            lastSearchClickTimestamp = now
 
-                Box(
-                    modifier = Modifier
-                        .size(110.dp)
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(Color(0xFF1E293B))
-                        .border(1.5.dp, accent, RoundedCornerShape(16.dp))
-                        .clickable { imagePickerLauncher.launch("image/*") },
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (customCoverUri != null) {
-                        AsyncImage(
-                            model = customCoverUri,
-                            contentDescription = "Cover",
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop
-                        )
-                    } else {
-                        val cachedBmp = manager.getCachedAlbumArt(song.id)
-                        if (cachedBmp != null) {
-                            Image(
-                                bitmap = cachedBmp.asImageBitmap(),
-                                contentDescription = "Cover",
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop
-                            )
+                            val shouldOpenKeyboard = isDoubleClick || isAlreadyOnSearch
+                            onTabSelected(key, shouldOpenKeyboard)
                         } else {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("🖼", fontSize = 28.sp)
-                                Text("Change Art", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                            }
+                            onTabSelected(key, false)
                         }
                     }
-                }
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                OutlinedTextField(
-                    value = title,
-                    onValueChange = { title = it },
-                    label = { Text("Title") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = textColor,
-                        unfocusedTextColor = textColor,
-                        focusedContainerColor = manager.getCurrentSurfaceColor(),
-                        unfocusedContainerColor = manager.getCurrentSurfaceColor(),
-                        focusedBorderColor = accent,
-                        cursorColor = accent
-                    )
+                    .padding(horizontal = 10.dp, vertical = 4.dp)
+            ) {
+                Text(icon, fontSize = 20.sp)
+                Text(
+                    text = label,
+                    fontSize = 11.sp,
+                    color = if (isSel) accent else Color(0xFF64748B),
+                    fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal
                 )
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                OutlinedTextField(
-                    value = artist,
-                    onValueChange = { artist = it },
-                    label = { Text("Artist") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = textColor,
-                        unfocusedTextColor = textColor,
-                        focusedContainerColor = manager.getCurrentSurfaceColor(),
-                        unfocusedContainerColor = manager.getCurrentSurfaceColor(),
-                        focusedBorderColor = accent,
-                        cursorColor = accent
-                    )
-                )
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                OutlinedTextField(
-                    value = album,
-                    onValueChange = { album = it },
-                    label = { Text("Album") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = textColor,
-                        unfocusedTextColor = textColor,
-                        focusedContainerColor = manager.getCurrentSurfaceColor(),
-                        unfocusedContainerColor = manager.getCurrentSurfaceColor(),
-                        focusedBorderColor = accent,
-                        cursorColor = accent
-                    )
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // Created Date and Time Picker Section
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(if (isDark) Color(0x1AFFFFFF) else Color(0xFFF1F5F9))
-                        .border(1.dp, glassBorderBrush, RoundedCornerShape(14.dp))
-                        .clickable {
-                            val cal = java.util.Calendar.getInstance().apply { timeInMillis = selectedDateMillis }
-                            val datePicker = android.app.DatePickerDialog(
-                                context,
-                                { _, year, month, dayOfMonth ->
-                                    val timePicker = android.app.TimePickerDialog(
-                                        context,
-                                        { _, hourOfDay, minute ->
-                                            val newCal = java.util.Calendar.getInstance().apply {
-                                                set(year, month, dayOfMonth, hourOfDay, minute)
-                                            }
-                                            selectedDateMillis = newCal.timeInMillis
-                                        },
-                                        cal.get(java.util.Calendar.HOUR_OF_DAY),
-                                        cal.get(java.util.Calendar.MINUTE),
-                                        false
-                                    )
-                                    timePicker.show()
-                                },
-                                cal.get(java.util.Calendar.YEAR),
-                                cal.get(java.util.Calendar.MONTH),
-                                cal.get(java.util.Calendar.DAY_OF_MONTH)
-                            )
-                            datePicker.show()
-                        }
-                        .padding(horizontal = 14.dp, vertical = 12.dp)
-                ) {
-                    Text(
-                        text = "Created Date and Time",
-                        color = Color(0xFF64748B),
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = formattedCreatedDate,
-                            color = textColor,
-                            fontSize = 13.5.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Text("📅 Edit", color = accent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(20.dp))
-
-                Button(
-                    onClick = {
-                        manager.updateSongMetadata(
-                            song = song,
-                            newTitle = title,
-                            newArtist = artist,
-                            newAlbum = album,
-                            newDate = selectedDateMillis.toString(),
-                            customCoverUri = customCoverUri
-                        )
-                        onDismiss()
-                    },
-                    modifier = Modifier.fillMaxWidth().height(48.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = accent)
-                ) {
-                    Text("Save to Storage", color = Color.White, fontWeight = FontWeight.Bold)
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Button(
-                    onClick = onDismiss,
-                    modifier = Modifier.fillMaxWidth().height(48.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = if (isDark) Color(0x22FFFFFF) else Color(0xFFF1F5F9))
-                ) {
-                    Text("Cancel", color = textColor, fontWeight = FontWeight.Bold)
-                }
             }
         }
     }
 }
 
+@UnstableApi
 @Composable
-fun AddToPlaylistDialog(manager: MusicManager, song: Song, onDismiss: () -> Unit) {
-    val isDark = manager.isDarkMode
-    val textColor = manager.getCurrentTextColor()
-    val dialogSurface = manager.getCurrentDialogColor()
+fun RecentlyPlayedCard(song: Song, manager: MusicManager, onClick: () -> Unit) {
     val glassBorderBrush = manager.getGlassBorderBrush()
-    val accent = manager.accentColor
+    var albumArtBitmap by remember(song.id) { mutableStateOf(manager.getCachedAlbumArt(song.id)) }
+    LaunchedEffect(song.id) {
+        if (albumArtBitmap == null) albumArtBitmap = manager.loadAlbumArtAsync(song)
+    }
 
     Box(
         modifier = Modifier
-            .fillMaxSize()
-            .zIndex(999f)
-            .background(Color(0x77000000))
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null
-            ) { onDismiss() },
-        contentAlignment = Alignment.BottomCenter
+            .width(116.dp)
+            .height(116.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .background(Color(0xFF1E293B))
+            .border(1.2.dp, glassBorderBrush, RoundedCornerShape(20.dp))
+            .clickable { onClick() }
     ) {
+        if (albumArtBitmap != null) {
+            Image(
+                bitmap = albumArtBitmap!!.asImageBitmap(),
+                contentDescription = song.title,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text("🎵", fontSize = 36.sp)
+            }
+        }
+
         Box(
             modifier = Modifier
+                .align(Alignment.BottomCenter)
                 .fillMaxWidth()
-                .fillMaxHeight(0.60f)
-                .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
-                .background(dialogSurface)
-                .border(1.5.dp, glassBorderBrush, RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
-                .clickable(enabled = false) {}
-                .padding(22.dp)
+                .background(Brush.verticalGradient(listOf(Color.Transparent, Color(0x88000000), Color(0xDE000000))))
+                .padding(horizontal = 6.dp, vertical = 6.dp),
+            contentAlignment = Alignment.Center
         ) {
-            Column(modifier = Modifier.fillMaxSize()) {
-                Text(
-                    text = "Add '${song.title}' to Playlist",
-                    color = textColor,
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Spacer(modifier = Modifier.height(14.dp))
+            Text(text = song.title, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
+        }
+    }
+}
 
-                if (manager.customPlaylists.isEmpty()) {
-                    Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                        Text("No playlists yet. Create one from Home screen.", color = Color(0xFF64748B), fontSize = 13.sp)
+@Composable
+fun LiveMechanicalGearIcon(isDark: Boolean, modifier: Modifier = Modifier) {
+    val infiniteTransition = rememberInfiniteTransition(label = "gearRotation")
+    val rotation by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 12000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "gearAngle"
+    )
+
+    Box(
+        modifier = modifier
+            .size(42.dp)
+            .clip(CircleShape)
+            .background(if (isDark) Color(0x33FFFFFF) else Color(0x1A000000))
+            .border(1.5.dp, if (isDark) Color(0x44FFFFFF) else Color(0x22000000), CircleShape),
+        contentAlignment = Alignment.Center
+    ) {
+        Spacer(
+            modifier = Modifier
+                .size(34.dp)
+                .rotate(rotation)
+                .drawWithCache {
+                    val center = Offset(size.width / 2f, size.height / 2f)
+                    val outerRadius = size.width / 2f
+                    val toothDepth = outerRadius * 0.22f
+                    val innerRingRadius = outerRadius - toothDepth
+                    val teethCount = 12
+                    val gearColor = if (isDark) Color(0xFFE2E8F0) else Color(0xFF334155)
+
+                    val path = Path().apply {
+                        for (i in 0 until teethCount) {
+                            val angleStep = (2.0 * Math.PI / teethCount).toFloat()
+                            val a1 = i * angleStep
+                            val a2 = a1 + (angleStep * 0.35f)
+                            val a3 = a1 + (angleStep * 0.65f)
+                            val a4 = (i + 1) * angleStep
+
+                            val p1 = Offset((center.x.toDouble() + (innerRingRadius * cos(a1.toDouble()))).toFloat(), (center.y.toDouble() + (innerRingRadius * sin(a1.toDouble()))).toFloat())
+                            val p2 = Offset((center.x.toDouble() + (outerRadius * cos(a2.toDouble()))).toFloat(), (center.y.toDouble() + (outerRadius * sin(a2.toDouble()))).toFloat())
+                            val p3 = Offset((center.x.toDouble() + (outerRadius * cos(a3.toDouble()))).toFloat(), (center.y.toDouble() + (outerRadius * sin(a3.toDouble()))).toFloat())
+                            val p4 = Offset((center.x.toDouble() + (innerRingRadius * cos(a4.toDouble()))).toFloat(), (center.y.toDouble() + (innerRingRadius * sin(a4.toDouble()))).toFloat())
+
+                            if (i == 0) moveTo(p1.x, p1.y) else lineTo(p1.x, p1.y)
+                            lineTo(p2.x, p2.y)
+                            lineTo(p3.x, p3.y)
+                            lineTo(p4.x, p4.y)
+                        }
+                        close()
                     }
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        items(
-                            items = manager.customPlaylists,
-                            key = { it.id }
-                        ) { pl ->
-                            val isAlreadyAdded = song.id in pl.songIds
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(if (isDark) Color(0x1AFFFFFF) else Color(0xFFF1F5F9))
-                                    .clickable {
-                                        if (isAlreadyAdded) {
-                                            manager.removeSongFromPlaylist(song.id, pl)
-                                        } else {
-                                            manager.addSongToPlaylist(song.id, pl)
-                                        }
-                                        onDismiss()
-                                    }
-                                    .padding(horizontal = 14.dp, vertical = 12.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    GlassmorphicFolderIcon(folderColor = Color(pl.iconColorHex), modifier = Modifier.size(28.dp))
-                                    Spacer(modifier = Modifier.width(12.dp))
-                                    Text(pl.name, color = textColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                                }
-                                Text(
-                                    text = if (isAlreadyAdded) "✓ In Playlist" else "+ Add",
-                                    color = if (isAlreadyAdded) accent else Color(0xFF64748B),
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
+
+                    val cavityRadius = innerRingRadius * 0.72f
+                    val hubRadius = innerRingRadius * 0.32f
+                    val spokeStrokeWidth = 2.5f.dp.toPx()
+                    val bgColor = if (isDark) Color(0xFF0F172A) else Color(0xFFE2E8F0)
+
+                    onDrawBehind {
+                        drawPath(path, gearColor)
+                        drawCircle(color = bgColor, radius = cavityRadius, center = center)
+                        drawCircle(color = gearColor, radius = hubRadius, center = center)
+                        for (s in 0 until 3) {
+                            val spAngle = (s * 2.0 * Math.PI / 3.0).toFloat()
+                            val spokeEnd = Offset((center.x.toDouble() + (cavityRadius * cos(spAngle.toDouble()))).toFloat(), (center.y.toDouble() + (cavityRadius * sin(spAngle.toDouble()))).toFloat())
+                            drawLine(color = gearColor, start = center, end = spokeEnd, strokeWidth = spokeStrokeWidth)
                         }
                     }
                 }
+        )
+    }
+}
 
-                Spacer(modifier = Modifier.height(10.dp))
-                Button(
-                    onClick = onDismiss,
-                    modifier = Modifier.fillMaxWidth().height(48.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = if (isDark) Color(0x22FFFFFF) else Color(0xFFF1F5F9)),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text("Close", color = textColor, fontWeight = FontWeight.Bold)
-                }
+@Composable
+fun TopBar(manager: MusicManager, onProfileClick: () -> Unit, onSettingsClick: () -> Unit) {
+    val textColor = manager.getCurrentTextColor()
+    val avatarPath = manager.profileImagePath
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(42.dp)
+                .shadow(6.dp, CircleShape, spotColor = manager.accentColor)
+                .clip(CircleShape)
+                .background(manager.getCurrentSurfaceColor())
+                .border(1.5.dp, manager.getGlassBorderBrush(), CircleShape)
+                .clickable {
+                    manager.triggerHapticFeedback(false)
+                    onProfileClick()
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            if (!avatarPath.isNullOrBlank() && File(avatarPath).exists()) {
+                AsyncImage(
+                    model = File(avatarPath),
+                    contentDescription = "Avatar",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                DefaultProfileAvatar(
+                    modifier = Modifier.fillMaxSize(),
+                    backgroundColor = Color.Transparent
+                )
             }
+        }
+
+        Text(text = "Melovish", color = textColor, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 0.5.sp)
+
+        LiveMechanicalGearIcon(
+            isDark = manager.isDarkMode,
+            modifier = Modifier.clickable {
+                manager.triggerHapticFeedback(false)
+                onSettingsClick()
+            }
+        )
+    }
+}
+
+@UnstableApi
+@Composable
+fun UniversalSongRow(song: Song, manager: MusicManager, isDark: Boolean, onPlay: () -> Unit, onMenuClick: () -> Unit) {
+    val isPlayingThis = manager.currentSong?.id == song.id
+    val accent = manager.accentColor
+
+    val textColor = if (isPlayingThis) accent else manager.getCurrentTextColor()
+    val cardBg = if (isPlayingThis) accent.copy(alpha = 0.12f) else manager.getCurrentSurfaceColor()
+    val glassBorderBrush = if (isPlayingThis) Brush.linearGradient(listOf(accent, accent)) else manager.getGlassBorderBrush()
+    var albumArtBitmap by remember(song.id) { mutableStateOf(manager.getCachedAlbumArt(song.id)) }
+    LaunchedEffect(song.id) {
+        if (albumArtBitmap == null) albumArtBitmap = manager.loadAlbumArtAsync(song)
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(cardBg)
+            .border(1.2.dp, glassBorderBrush, RoundedCornerShape(16.dp))
+            .clickable { onPlay() }
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(46.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(Color(0xFF1E293B)),
+            contentAlignment = Alignment.Center
+        ) {
+            if (albumArtBitmap != null) {
+                Image(
+                    bitmap = albumArtBitmap!!.asImageBitmap(),
+                    contentDescription = "Art",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                Text("🎵", fontSize = 20.sp)
+            }
+        }
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = song.title, color = textColor, fontSize = 14.sp, fontWeight = if (isPlayingThis) FontWeight.ExtraBold else FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(text = "${formatFileSize(song.size)} • ${if (song.artist.isNotBlank()) song.artist else "Unknown"}", color = Color(0xFF64748B), fontSize = 11.sp, maxLines = 1)
+        }
+
+        if (isPlayingThis) {
+            LiveAudioWaveEqualizer(isAnimating = manager.isPlaying, accentColor = accent)
+        } else {
+            Text(formatTime(song.duration), color = Color(0xFF94A3B8), fontSize = 12.sp)
+        }
+
+        Spacer(modifier = Modifier.width(6.dp))
+
+        Box(modifier = Modifier.size(36.dp).clip(CircleShape).clickable { onMenuClick() }, contentAlignment = Alignment.Center) {
+            Text("⋮", color = textColor, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
         }
     }
 }
