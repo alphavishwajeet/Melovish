@@ -1684,7 +1684,7 @@ class MusicManager(val context: Context) {
                         val durationMs = cursor.getLong(durationCol)
                         val fileSizeBytes = cursor.getLong(sizeCol)
                         val fullPath = cursor.getString(dataCol) ?: ""
-                        val dateAdded = cursor.getLong(dateCol)
+                        val dateAddedSecs = cursor.getLong(dateCol)
 
                         val file = File(fullPath)
                         val parentFolder = file.parentFile?.name ?: "Storage"
@@ -1698,7 +1698,17 @@ class MusicManager(val context: Context) {
                         val customTitle = prefs.getString("custom_title_$id", cleanTitle) ?: cleanTitle
                         val customArtist = prefs.getString("custom_artist_$id", artist) ?: artist
                         val customAlbum = prefs.getString("custom_album_$id", album) ?: album
-                        val customDate = prefs.getString("custom_date_$id", dateAdded.toString()) ?: dateAdded.toString()
+
+                        // Accurate creation / download / modified fallback in milliseconds
+                        val defaultTimestampMillis = if (file.exists() && file.lastModified() > 0L) {
+                            file.lastModified()
+                        } else if (dateAddedSecs > 0L) {
+                            dateAddedSecs * 1000L
+                        } else {
+                            System.currentTimeMillis()
+                        }
+
+                        val customDate = prefs.getString("custom_date_$id", defaultTimestampMillis.toString()) ?: defaultTimestampMillis.toString()
 
                         val ext = file.extension.uppercase(Locale.getDefault())
                         val format = when (ext) {
@@ -2234,12 +2244,9 @@ class MusicManager(val context: Context) {
                     listOf(song.uri)
                 )
                 val intentSenderRequest = IntentSenderRequest.Builder(writePendingIntent.intentSender).build()
-                val act = attachedActivity
                 val launcher = writeRequestLauncher
                 if (launcher != null) {
                     launcher.launch(intentSenderRequest)
-                } else if (act != null) {
-                    executePendingStorageWrite()
                 } else {
                     executePendingStorageWrite()
                 }
@@ -2285,6 +2292,7 @@ class MusicManager(val context: Context) {
 
             var finalPath = task.song.path
             var fileUpdatedOnDisk = false
+            val releaseDateMillis = task.newDate.toLongOrNull()
 
             try {
                 val origFile = File(task.song.path)
@@ -2305,7 +2313,6 @@ class MusicManager(val context: Context) {
                     tag.setField(FieldKey.ARTIST, task.newArtist)
                     tag.setField(FieldKey.ALBUM, task.newAlbum)
 
-                    val releaseDateMillis = task.newDate.toLongOrNull()
                     if (releaseDateMillis != null && releaseDateMillis > 0L) {
                         val yearStr = SimpleDateFormat("yyyy", Locale.ENGLISH).format(releaseDateMillis)
                         val fullDateStr = SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH).format(releaseDateMillis)
@@ -2351,6 +2358,17 @@ class MusicManager(val context: Context) {
                 e.printStackTrace()
             }
 
+            // Directly modify the physical file's filesystem timestamp
+            try {
+                val diskFile = File(finalPath)
+                if (diskFile.exists() && releaseDateMillis != null && releaseDateMillis > 0L) {
+                    diskFile.setLastModified(releaseDateMillis)
+                }
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                e.printStackTrace()
+            }
+
             try {
                 val cv = ContentValues().apply {
                     put(MediaStore.Audio.Media.TITLE, task.newTitle)
@@ -2360,10 +2378,10 @@ class MusicManager(val context: Context) {
                     if (finalPath != task.song.path) {
                         put(MediaStore.Audio.Media.DATA, finalPath)
                     }
-                    val releaseDateMillis = task.newDate.toLongOrNull()
                     if (releaseDateMillis != null && releaseDateMillis > 0L) {
                         val yearInt = SimpleDateFormat("yyyy", Locale.ENGLISH).format(releaseDateMillis).toIntOrNull()
                         if (yearInt != null) put(MediaStore.Audio.Media.YEAR, yearInt)
+                        put(MediaStore.Audio.Media.DATE_MODIFIED, releaseDateMillis / 1000L)
                     }
                 }
                 context.contentResolver.update(task.song.uri, cv, null, null)
