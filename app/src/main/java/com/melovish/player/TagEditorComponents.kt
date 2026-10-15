@@ -996,9 +996,17 @@ fun TagEditorDialog(
     var title by remember { mutableStateOf(song.title) }
     var artist by remember { mutableStateOf(song.artist) }
     var album by remember { mutableStateOf(song.album) }
-    var dateMillis by remember {
-        val parsed = song.releaseDate.toLongOrNull() ?: System.currentTimeMillis()
-        mutableStateOf(parsed)
+
+    // Fallback: Read existing releaseDate millis, or the real file creation/download/modified timestamp from storage
+    var dateMillis by remember(song) {
+        val parsed = song.releaseDate.toLongOrNull()
+        val initialTimestamp = if (parsed != null && parsed > 0L) {
+            if (parsed < 10000000000L) parsed * 1000L else parsed
+        } else {
+            val file = File(song.path)
+            if (file.exists() && file.lastModified() > 0L) file.lastModified() else System.currentTimeMillis()
+        }
+        mutableStateOf(initialTimestamp)
     }
 
     var selectedCoverUri by remember { mutableStateOf<Uri?>(null) }
@@ -1242,7 +1250,7 @@ fun TagEditorDialog(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Text(
-                    text = "Release Date & Time",
+                    text = "Created Date and Time",
                     fontSize = 12.5.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = accent
