@@ -18,8 +18,8 @@ android {
         // =========================================================================
         // • versionCode: Internal Android/Play Store number. Increase by +1 every time (1, 2, 3...)
         // • versionName: The visible version string shown to users in app details (e.g., "1.0.0", "1.0.1")
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.0.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
