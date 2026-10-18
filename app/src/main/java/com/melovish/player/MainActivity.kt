@@ -104,6 +104,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
@@ -495,12 +496,24 @@ fun MelovishRootApp(manager: MusicManager) {
     var activeSongInfo by remember { mutableStateOf<Song?>(null) }
     var activeAddToPlaylistSong by remember { mutableStateOf<Song?>(null) }
 
-    val homeListState = rememberLazyListState()
-    val libraryListState = rememberLazyListState()
-    val libraryGridState = rememberLazyGridState()
-    val artistsListState = rememberLazyListState()
-    val artistsGridState = rememberLazyGridState()
-    val searchListState = rememberLazyListState()
+    val homeListState = rememberSaveable(saver = LazyListState.Saver) {
+        LazyListState()
+    }
+    val libraryListState = rememberSaveable(saver = LazyListState.Saver) {
+        LazyListState()
+    }
+    val libraryGridState = rememberSaveable(saver = LazyGridState.Saver) {
+        LazyGridState()
+    }
+    val artistsListState = rememberSaveable(saver = LazyListState.Saver) {
+        LazyListState()
+    }
+    val artistsGridState = rememberSaveable(saver = LazyGridState.Saver) {
+        LazyGridState()
+    }
+    val searchListState = rememberSaveable(saver = LazyListState.Saver) {
+        LazyListState()
+    }
     val coroutineScope = rememberCoroutineScope()
 
     var isTopBarVisible by remember { mutableStateOf(true) }
@@ -4225,7 +4238,7 @@ fun PlaylistAddSearchDialog(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .fillMaxHeight(0.85f)
+                .fillMaxHeight(0.85f) // Matches reference image height
                 .imePadding()
                 .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
                 .background(dialogSurface)

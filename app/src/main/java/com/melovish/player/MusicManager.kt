@@ -1385,6 +1385,8 @@ class MusicManager(val context: Context) {
         currentSortOrder = order
         managerScope.launch(Dispatchers.IO) {
             prefs.edit().putString("saved_song_sort", order.name).apply()
+            // Immediately persist sorted catalog cache to guarantee cold start matches chosen order
+            persistSongsCache(allSongs)
         }
     }
 
@@ -1591,8 +1593,19 @@ class MusicManager(val context: Context) {
         managerScope.launch(Dispatchers.IO) {
             try {
                 val arr = JSONArray()
+                // Sort according to current active order before caching so cold start order is identical
+                val sortedSnapshot = when (currentSortOrder) {
+                    SongSortOrder.A_TO_Z -> songs.sortedBy { it.title.lowercase(Locale.getDefault()) }
+                    SongSortOrder.Z_TO_A -> songs.sortedByDescending { it.title.lowercase(Locale.getDefault()) }
+                    SongSortOrder.NEWEST -> songs.sortedByDescending { it.id }
+                    SongSortOrder.OLDEST -> songs.sortedBy { it.id }
+                    SongSortOrder.ARTIST -> songs.sortedBy { it.artist.lowercase(Locale.getDefault()) }
+                    SongSortOrder.DURATION -> songs.sortedByDescending { it.duration }
+                    SongSortOrder.FILE_SIZE -> songs.sortedByDescending { it.size }
+                }
+
                 // Cache up to 250 top pre-sorted songs matching the user's view
-                songs.take(250).forEach { s ->
+                sortedSnapshot.take(250).forEach { s ->
                     val o = JSONObject().apply {
                         put("id", s.id)
                         put("title", s.title)
@@ -1780,12 +1793,18 @@ class MusicManager(val context: Context) {
                 }
             }
 
+            // Diff check to prevent flickering/screen jumps if the list hasn't fundamentally changed
+            val listHasChanged = allSongs.size != visibleSongs.size ||
+                    (allSongs.isNotEmpty() && visibleSongs.isNotEmpty() && allSongs.first().id != visibleSongs.first().id)
+
             // Immediately post song list to UI for an instant 1-second cold boot
             withContext(Dispatchers.Main.immediate) {
                 rawStorageSongs.clear()
                 rawStorageSongs.addAll(songList)
-                allSongs.clear()
-                allSongs.addAll(visibleSongs)
+                if (listHasChanged || allSongs.isEmpty()) {
+                    allSongs.clear()
+                    allSongs.addAll(visibleSongs)
+                }
                 refreshHistory()
                 customPlaylists.clear()
                 customPlaylists.addAll(updatedPlaylists)
@@ -1794,18 +1813,7 @@ class MusicManager(val context: Context) {
             }
 
             savePlaylists()
-
-            // Save cache pre-sorted according to the active sort order so cold boot never shifts
-            val sortedForCache = when (currentSortOrder) {
-                SongSortOrder.A_TO_Z -> visibleSongs.sortedBy { it.title.lowercase(Locale.getDefault()) }
-                SongSortOrder.Z_TO_A -> visibleSongs.sortedByDescending { it.title.lowercase(Locale.getDefault()) }
-                SongSortOrder.NEWEST -> visibleSongs.sortedByDescending { it.id }
-                SongSortOrder.OLDEST -> visibleSongs.sortedBy { it.id }
-                SongSortOrder.ARTIST -> visibleSongs.sortedBy { it.artist.lowercase(Locale.getDefault()) }
-                SongSortOrder.DURATION -> visibleSongs.sortedByDescending { it.duration }
-                SongSortOrder.FILE_SIZE -> visibleSongs.sortedByDescending { it.size }
-            }
-            persistSongsCache(sortedForCache)
+            persistSongsCache(visibleSongs)
 
             // Deferred background artist grouping to maintain lightning UI responsiveness
             ArtistDataManager.init(context)
