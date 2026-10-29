@@ -221,6 +221,35 @@ class MusicManager(val context: Context) {
 
     var isAlwaysPlay by mutableStateOf(prefs.getBoolean("always_play_enabled", false))
 
+    // Call interruption tracking: Auto-resume strictly when isAlwaysPlay is OFF
+    private var shouldResumeAfterCall = false
+
+    private val audioFocusChangeListener = AudioManager.OnAudioFocusChangeListener { focusChange ->
+        if (isAlwaysPlay) return@OnAudioFocusChangeListener
+
+        when (focusChange) {
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT,
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
+                if (player.isPlaying) {
+                    shouldResumeAfterCall = true
+                    player.pause()
+                }
+            }
+            AudioManager.AUDIOFOCUS_GAIN -> {
+                if (!isAlwaysPlay && shouldResumeAfterCall) {
+                    shouldResumeAfterCall = false
+                    player.play()
+                }
+            }
+            AudioManager.AUDIOFOCUS_LOSS -> {
+                shouldResumeAfterCall = false
+                if (player.isPlaying) {
+                    player.pause()
+                }
+            }
+        }
+    }
+
     val player: ExoPlayer = ExoPlayer.Builder(context, renderersFactory)
         .setAudioAttributes(
             AudioAttributes.Builder()
@@ -262,6 +291,10 @@ class MusicManager(val context: Context) {
 
     var isScanningStorage by mutableStateOf(false)
     var isInitialLoading by mutableStateOf(true)
+    private var hasPendingScanRequest = false
+
+    // Persistent total song count to avoid the 250-to-full number jump on cold start
+    var totalSongsCount by mutableIntStateOf(prefs.getInt("total_library_song_count", 0))
 
     // Debounced automatic MediaStore real-time observation
     private var mediaStoreObserverDebounceJob: Job? = null
@@ -785,6 +818,16 @@ class MusicManager(val context: Context) {
     }
 
     private fun setupPlayerListener() {
+        // Register AudioManager focus listener for transient call interruptions
+        try {
+            @Suppress("DEPRECATION")
+            audioManager.requestAudioFocus(
+                audioFocusChangeListener,
+                AudioManager.STREAM_MUSIC,
+                AudioManager.AUDIOFOCUS_GAIN
+            )
+        } catch (_: Exception) {}
+
         player.addListener(object : Player.Listener {
             override fun onAudioSessionIdChanged(audioSessionId: Int) {
                 if (audioSessionId != C.AUDIO_SESSION_ID_UNSET && audioSessionId != 0) {
@@ -795,8 +838,11 @@ class MusicManager(val context: Context) {
             override fun onIsPlayingChanged(playing: Boolean) {
                 isPlaying = playing
                 updateNotification()
-                if (playing && isFadeOnStart && !isCrossfadeEnabled && player.currentPosition <= 1200L) {
-                    triggerFadeIn(1000L)
+                if (playing) {
+                    shouldResumeAfterCall = false
+                    if (isFadeOnStart && !isCrossfadeEnabled && player.currentPosition <= 1200L) {
+                        triggerFadeIn(1000L)
+                    }
                 }
             }
 
@@ -1296,6 +1342,19 @@ class MusicManager(val context: Context) {
 
     fun toggleAlwaysPlay(enabled: Boolean) {
         isAlwaysPlay = enabled
+        if (enabled) {
+            shouldResumeAfterCall = false
+        }
+        player.setAudioAttributes(
+            AudioAttributes.Builder()
+                .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
+                .setUsage(C.USAGE_MEDIA)
+                .setSpatializationBehavior(
+                    if (isLosslessEnabled) C.SPATIALIZATION_BEHAVIOR_AUTO else C.SPATIALIZATION_BEHAVIOR_NEVER
+                )
+                .build(),
+            !enabled
+        )
         managerScope.launch(Dispatchers.IO) {
             prefs.edit().putBoolean("always_play_enabled", enabled).apply()
         }
@@ -1529,6 +1588,7 @@ class MusicManager(val context: Context) {
             val cachedJson = prefs.getString("cached_songs_catalog", null)
             if (cachedJson.isNullOrBlank()) {
                 withContext(Dispatchers.Main.immediate) { isInitialLoading = false }
+                scanStorage()
                 return@withContext
             }
 
@@ -1586,6 +1646,9 @@ class MusicManager(val context: Context) {
                 prefs.edit().remove("cached_songs_catalog").apply()
             } catch (_: Exception) {}
             withContext(Dispatchers.Main.immediate) { isInitialLoading = false }
+        } finally {
+            // Trigger storage scan to update any songs beyond the cached snapshot
+            scanStorage()
         }
     }
 
@@ -1593,7 +1656,6 @@ class MusicManager(val context: Context) {
         managerScope.launch(Dispatchers.IO) {
             try {
                 val arr = JSONArray()
-                // Sort according to current active order before caching so cold start order is identical
                 val sortedSnapshot = when (currentSortOrder) {
                     SongSortOrder.A_TO_Z -> songs.sortedBy { it.title.lowercase(Locale.getDefault()) }
                     SongSortOrder.Z_TO_A -> songs.sortedByDescending { it.title.lowercase(Locale.getDefault()) }
@@ -1648,38 +1710,38 @@ class MusicManager(val context: Context) {
     }
 
     fun scanStorage() {
-        if (isScanningStorage) return
+        if (isScanningStorage) {
+            hasPendingScanRequest = true
+            return
+        }
         isScanningStorage = true
 
         managerScope.launch(Dispatchers.IO) {
-            val songList = ArrayList<Song>(4500)
-            val collection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
-            } else {
-                MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
-            }
-
-            val projection = arrayOf(
-                MediaStore.Audio.Media._ID,
-                MediaStore.Audio.Media.DISPLAY_NAME,
-                MediaStore.Audio.Media.TITLE,
-                MediaStore.Audio.Media.ARTIST,
-                MediaStore.Audio.Media.ALBUM,
-                MediaStore.Audio.Media.ALBUM_ID,
-                MediaStore.Audio.Media.DURATION,
-                MediaStore.Audio.Media.SIZE,
-                MediaStore.Audio.Media.DATA,
-                MediaStore.Audio.Media.DATE_ADDED
-            )
-
-            val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
-            // Indexed primary key descending query: 5x faster than COLLATE NOCASE string sorting
-            val sortOrder = "${MediaStore.Audio.Media._ID} DESC"
-
-            // Batch read all shared preferences into memory to eliminate 20,000+ disk reads
-            val allPrefsSnapshot = prefs.all
-
             try {
+                val songList = ArrayList<Song>(4500)
+                val collection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
+                } else {
+                    MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+                }
+
+                val projection = arrayOf(
+                    MediaStore.Audio.Media._ID,
+                    MediaStore.Audio.Media.DISPLAY_NAME,
+                    MediaStore.Audio.Media.TITLE,
+                    MediaStore.Audio.Media.ARTIST,
+                    MediaStore.Audio.Media.ALBUM,
+                    MediaStore.Audio.Media.ALBUM_ID,
+                    MediaStore.Audio.Media.DURATION,
+                    MediaStore.Audio.Media.SIZE,
+                    MediaStore.Audio.Media.DATA,
+                    MediaStore.Audio.Media.DATE_ADDED
+                )
+
+                val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
+                val sortOrder = "${MediaStore.Audio.Media._ID} DESC"
+                val allPrefsSnapshot = prefs.all
+
                 context.contentResolver.query(collection, projection, selection, null, sortOrder)?.use { cursor ->
                     val idCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
                     val displayCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DISPLAY_NAME)
@@ -1705,7 +1767,6 @@ class MusicManager(val context: Context) {
                         val fullPath = cursor.getString(dataCol) ?: ""
                         val dateAddedSecs = cursor.getLong(dateCol)
 
-                        // Fast parent folder resolution without constructing repeated File objects
                         val lastSlash = fullPath.lastIndexOf(File.separatorChar)
                         val parentFolder = if (lastSlash > 0) {
                             val prevSlash = fullPath.lastIndexOf(File.separatorChar, lastSlash - 1)
@@ -1716,7 +1777,6 @@ class MusicManager(val context: Context) {
 
                         val uri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id)
 
-                        // Memory lookups from the preloaded batch map
                         val playCount = (allPrefsSnapshot["play_count_$id"] as? Int) ?: 0
                         val lastPlayed = (allPrefsSnapshot["last_played_$id"] as? Long) ?: 0L
                         val isFav = (allPrefsSnapshot["fav_$id"] as? Boolean) ?: false
@@ -1771,58 +1831,65 @@ class MusicManager(val context: Context) {
                         )
                     }
                 }
+
+                val hiddenFoldersSet = hiddenFolders.toHashSet()
+                val hiddenAudioSet = hiddenAudioIds.toHashSet()
+                val visibleSongs = songList.filter { it.folderName !in hiddenFoldersSet && it.id !in hiddenAudioSet }
+
+                val updatedPlaylists = customPlaylists.map { pl ->
+                    if (pl.isFolderPinned && !pl.folderName.isNullOrBlank()) {
+                        val currentFolderSongIds = visibleSongs
+                            .filter { it.folderName.equals(pl.folderName, ignoreCase = true) }
+                            .map { it.id }
+                            .toImmutableList()
+                        pl.copy(songIds = currentFolderSongIds)
+                    } else {
+                        pl
+                    }
+                }
+
+                // Guaranteed full library synchronization: never remain stuck at the 250 cache limit
+                val listHasChanged = allSongs.size != visibleSongs.size ||
+                        allSongs.size == 250 ||
+                        (allSongs.isNotEmpty() && visibleSongs.isNotEmpty() && allSongs.first().id != visibleSongs.first().id)
+
+                withContext(Dispatchers.Main.immediate) {
+                    rawStorageSongs.clear()
+                    rawStorageSongs.addAll(songList)
+                    if (listHasChanged || allSongs.isEmpty() || visibleSongs.size > allSongs.size) {
+                        allSongs.clear()
+                        allSongs.addAll(visibleSongs)
+                    }
+                    totalSongsCount = visibleSongs.size
+                    refreshHistory()
+                    customPlaylists.clear()
+                    customPlaylists.addAll(updatedPlaylists)
+                    isInitialLoading = false
+                }
+
+                savePlaylists()
+                persistSongsCache(visibleSongs)
+                prefs.edit().putInt("total_library_song_count", visibleSongs.size).apply()
+
+                ArtistDataManager.init(context)
+                val parsed = withContext(Dispatchers.Default) {
+                    ArtistParsingEngine.parseAndGroupArtists(visibleSongs)
+                }
+                withContext(Dispatchers.Main.immediate) {
+                    parsedArtistsList.clear()
+                    parsedArtistsList.addAll(parsed)
+                }
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
                 e.printStackTrace()
-            }
-
-            val hiddenFoldersSet = hiddenFolders.toHashSet()
-            val hiddenAudioSet = hiddenAudioIds.toHashSet()
-            val visibleSongs = songList.filter { it.folderName !in hiddenFoldersSet && it.id !in hiddenAudioSet }
-
-            // Dynamic Synchronization: Auto-update Favorite Folder Playlists when tracks are added/deleted
-            val updatedPlaylists = customPlaylists.map { pl ->
-                if (pl.isFolderPinned && !pl.folderName.isNullOrBlank()) {
-                    val currentFolderSongIds = visibleSongs
-                        .filter { it.folderName.equals(pl.folderName, ignoreCase = true) }
-                        .map { it.id }
-                        .toImmutableList()
-                    pl.copy(songIds = currentFolderSongIds)
-                } else {
-                    pl
+            } finally {
+                withContext(Dispatchers.Main.immediate) {
+                    isScanningStorage = false
+                    if (hasPendingScanRequest) {
+                        hasPendingScanRequest = false
+                        scanStorage()
+                    }
                 }
-            }
-
-            // Diff check to prevent flickering/screen jumps if the list hasn't fundamentally changed
-            val listHasChanged = allSongs.size != visibleSongs.size ||
-                    (allSongs.isNotEmpty() && visibleSongs.isNotEmpty() && allSongs.first().id != visibleSongs.first().id)
-
-            // Immediately post song list to UI for an instant 1-second cold boot
-            withContext(Dispatchers.Main.immediate) {
-                rawStorageSongs.clear()
-                rawStorageSongs.addAll(songList)
-                if (listHasChanged || allSongs.isEmpty()) {
-                    allSongs.clear()
-                    allSongs.addAll(visibleSongs)
-                }
-                refreshHistory()
-                customPlaylists.clear()
-                customPlaylists.addAll(updatedPlaylists)
-                isScanningStorage = false
-                isInitialLoading = false
-            }
-
-            savePlaylists()
-            persistSongsCache(visibleSongs)
-
-            // Deferred background artist grouping to maintain lightning UI responsiveness
-            ArtistDataManager.init(context)
-            val parsed = withContext(Dispatchers.Default) {
-                ArtistParsingEngine.parseAndGroupArtists(visibleSongs)
-            }
-            withContext(Dispatchers.Main.immediate) {
-                parsedArtistsList.clear()
-                parsedArtistsList.addAll(parsed)
             }
         }
     }
@@ -1859,6 +1926,7 @@ class MusicManager(val context: Context) {
         currentPosition = initialPositionMs
         duration = song.duration
         isPlaying = true
+        shouldResumeAfterCall = false
 
         val isSameQueue = currentSectionName == section &&
                 playbackQueue.size == queue.size &&
@@ -1982,10 +2050,12 @@ class MusicManager(val context: Context) {
 
     fun togglePlayPause() {
         if (player.isPlaying) {
+            shouldResumeAfterCall = false
             currentSong?.let { saveSongPosition(it.id, player.currentPosition) }
             player.pause()
             isPlaying = false
         } else {
+            shouldResumeAfterCall = false
             if (isFadeOnStart && player.currentPosition <= 1200L) triggerFadeIn(1000L)
             player.play()
             isPlaying = true
@@ -1994,6 +2064,7 @@ class MusicManager(val context: Context) {
     }
 
     fun playNext() {
+        shouldResumeAfterCall = false
         if (player.hasNextMediaItem()) {
             val nextIdx = player.nextMediaItemIndex
             if (nextIdx in playbackQueue.indices) {
@@ -2012,6 +2083,7 @@ class MusicManager(val context: Context) {
     }
 
     fun playPrevious() {
+        shouldResumeAfterCall = false
         if (player.currentPosition > 3000L || !player.hasPreviousMediaItem()) {
             currentPosition = 0L
             player.seekTo(0L)
@@ -2648,6 +2720,11 @@ class MusicManager(val context: Context) {
             rawStorageSongs.removeAll { it.id == song.id }
             playbackQueue.removeAll { it.id == song.id }
             historySongs.removeAll { it.id == song.id }
+
+            if (totalSongsCount > 0) {
+                totalSongsCount--
+                prefs.edit().putInt("total_library_song_count", totalSongsCount).apply()
+            }
 
             refreshArtistsInBackground()
             true

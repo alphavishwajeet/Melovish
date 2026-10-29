@@ -496,24 +496,30 @@ fun MelovishRootApp(manager: MusicManager) {
     var activeSongInfo by remember { mutableStateOf<Song?>(null) }
     var activeAddToPlaylistSong by remember { mutableStateOf<Song?>(null) }
 
-    val homeListState = rememberSaveable(saver = LazyListState.Saver) {
-        LazyListState()
-    }
-    val libraryListState = rememberSaveable(saver = LazyListState.Saver) {
-        LazyListState()
-    }
-    val libraryGridState = rememberSaveable(saver = LazyGridState.Saver) {
-        LazyGridState()
-    }
-    val artistsListState = rememberSaveable(saver = LazyListState.Saver) {
-        LazyListState()
-    }
-    val artistsGridState = rememberSaveable(saver = LazyGridState.Saver) {
-        LazyGridState()
-    }
-    val searchListState = rememberSaveable(saver = LazyListState.Saver) {
-        LazyListState()
-    }
+    // =========================================================================
+    // 📌 HOISTED PERSISTENT SCROLL STATES (Zero-Loss across Tab & Navigation)
+    // =========================================================================
+
+    // Top-Level Tab States
+    val homeListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
+    val libraryListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
+    val libraryGridState = rememberSaveable(saver = LazyGridState.Saver) { LazyGridState() }
+    val artistsListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
+    val artistsGridState = rememberSaveable(saver = LazyGridState.Saver) { LazyGridState() }
+    val searchListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
+
+    // Secondary & Drill-Down Sub-Screen States
+    val profileListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
+    val settingsListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
+    val folderSongsListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
+    val folderSongsGridState = rememberSaveable(saver = LazyGridState.Saver) { LazyGridState() }
+    val playlistSongsListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
+    val playlistSongsGridState = rememberSaveable(saver = LazyGridState.Saver) { LazyGridState() }
+    val artistSongsListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
+    val artistSongsGridState = rememberSaveable(saver = LazyGridState.Saver) { LazyGridState() }
+    val filteredSongsListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
+    val filteredSongsGridState = rememberSaveable(saver = LazyGridState.Saver) { LazyGridState() }
+
     val coroutineScope = rememberCoroutineScope()
 
     var isTopBarVisible by remember { mutableStateOf(true) }
@@ -637,6 +643,7 @@ fun MelovishRootApp(manager: MusicManager) {
                     when {
                         activeScreen == "settings" -> SettingsScreen(
                             manager = manager,
+                            listState = settingsListState,
                             onBackClick = {
                                 activeScreen = if (previousActiveScreen != "settings") previousActiveScreen else "home"
                             },
@@ -651,6 +658,7 @@ fun MelovishRootApp(manager: MusicManager) {
                         )
                         activeScreen == "profile" -> ProfileScreen(
                             manager = manager,
+                            listState = profileListState,
                             onBackClick = {
                                 activeScreen = if (previousActiveScreen != "profile") previousActiveScreen else "home"
                             }
@@ -661,6 +669,8 @@ fun MelovishRootApp(manager: MusicManager) {
                                 artistItem = curArtist,
                                 manager = manager,
                                 isDark = isDark,
+                                listState = artistSongsListState,
+                                gridState = artistSongsGridState,
                                 onBack = { selectedArtist = null },
                                 onSongMenuClick = { song: Song ->
                                     rootSelectedArtistSongForAction = Pair(song, curArtist.name)
@@ -679,6 +689,8 @@ fun MelovishRootApp(manager: MusicManager) {
                                 songs = albumSongs,
                                 manager = manager,
                                 isDark = isDark,
+                                listState = filteredSongsListState,
+                                gridState = filteredSongsGridState,
                                 onBack = { selectedAlbum = null },
                                 onSongMenuClick = { song: Song -> activeSongForMenu = song },
                                 onSongClick = { song -> handleSmartSongClick(song, albumSongs, "Album: $curAlbum") }
@@ -690,6 +702,8 @@ fun MelovishRootApp(manager: MusicManager) {
                                 playlist = curPlaylist,
                                 manager = manager,
                                 isDark = isDark,
+                                listState = playlistSongsListState,
+                                gridState = playlistSongsGridState,
                                 onBack = { selectedPlaylist = null },
                                 onSongMenuClick = { song: Song -> activeSongForMenu = song },
                                 onSongClick = { song, songs -> handleSmartSongClick(song, songs, curPlaylist.name) },
@@ -704,6 +718,8 @@ fun MelovishRootApp(manager: MusicManager) {
                                 folderName = curFolder,
                                 manager = manager,
                                 isDark = isDark,
+                                listState = folderSongsListState,
+                                gridState = folderSongsGridState,
                                 onBack = { selectedFolder = null },
                                 onSongMenuClick = { song: Song -> activeSongForMenu = song },
                                 onSongClick = { song, songs -> handleSmartSongClick(song, songs, curFolder) },
@@ -1540,6 +1556,7 @@ fun HomeScreen(
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Text("All Songs", color = textColor, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                     Row(verticalAlignment = Alignment.CenterVertically) {
+                        val displayCount = if (manager.totalSongsCount > 0) manager.totalSongsCount else manager.allSongs.size
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(12.dp))
@@ -1547,7 +1564,7 @@ fun HomeScreen(
                                 .border(1.2.dp, glassBorderBrush, RoundedCornerShape(12.dp))
                                 .padding(horizontal = 10.dp, vertical = 6.dp)
                         ) {
-                            Text(if (showSkeleton) "Loading..." else "${manager.allSongs.size} Songs", color = textColor, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text(if (showSkeleton) "Loading..." else "$displayCount Songs", color = textColor, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         }
                         Spacer(modifier = Modifier.width(6.dp))
 
@@ -2159,6 +2176,8 @@ fun PlaylistDetailScreen(
     onSongMenuClick: (Song) -> Unit,
     onSongClick: (Song, List<Song>) -> Unit,
     onFolderClick: (String) -> Unit,
+    listState: LazyListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() },
+    gridState: LazyGridState = rememberSaveable(saver = LazyGridState.Saver) { LazyGridState() },
     onOpenGridSizeDialog: () -> Unit = {},
     onOpenAddSongsDialog: () -> Unit = {}
 ) {
@@ -2304,7 +2323,11 @@ fun PlaylistDetailScreen(
             } else {
                 when (manager.playlistInnerViewMode) {
                     GridViewMode.LIST -> {
-                        LazyColumn(contentPadding = PaddingValues(bottom = 120.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        LazyColumn(
+                            state = listState,
+                            contentPadding = PaddingValues(bottom = 120.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
                             items(
                                 items = sortedSongs,
                                 key = { it.id },
@@ -2316,6 +2339,7 @@ fun PlaylistDetailScreen(
                     }
                     GridViewMode.GRID_2 -> {
                         LazyVerticalGrid(
+                            state = gridState,
                             columns = GridCells.Fixed(2),
                             contentPadding = PaddingValues(bottom = 120.dp),
                             horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -2333,6 +2357,7 @@ fun PlaylistDetailScreen(
                     }
                     GridViewMode.GRID_3 -> {
                         LazyVerticalGrid(
+                            state = gridState,
                             columns = GridCells.Fixed(3),
                             contentPadding = PaddingValues(bottom = 120.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -2350,6 +2375,7 @@ fun PlaylistDetailScreen(
                     }
                     GridViewMode.GRID_4 -> {
                         LazyVerticalGrid(
+                            state = gridState,
                             columns = GridCells.Fixed(4),
                             contentPadding = PaddingValues(bottom = 120.dp),
                             horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -2367,6 +2393,7 @@ fun PlaylistDetailScreen(
                     }
                     GridViewMode.HERO_GRID -> {
                         LazyVerticalGrid(
+                            state = gridState,
                             columns = GridCells.Fixed(2),
                             contentPadding = PaddingValues(bottom = 120.dp),
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -2401,6 +2428,8 @@ fun FolderSongsScreen(
     onBack: () -> Unit,
     onSongMenuClick: (Song) -> Unit,
     onSongClick: (Song, List<Song>) -> Unit,
+    listState: LazyListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() },
+    gridState: LazyGridState = rememberSaveable(saver = LazyGridState.Saver) { LazyGridState() },
     onOpenGridSizeDialog: () -> Unit = {}
 ) {
     val rawSongs = remember(folderName, manager.allSongs.size) { manager.allSongs.filter { it.folderName == folderName } }
@@ -2526,7 +2555,11 @@ fun FolderSongsScreen(
             } else {
                 when (manager.folderInnerViewMode) {
                     GridViewMode.LIST -> {
-                        LazyColumn(contentPadding = PaddingValues(bottom = 120.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        LazyColumn(
+                            state = listState,
+                            contentPadding = PaddingValues(bottom = 120.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
                             items(
                                 items = sortedSongs,
                                 key = { it.id },
@@ -2538,6 +2571,7 @@ fun FolderSongsScreen(
                     }
                     GridViewMode.GRID_2 -> {
                         LazyVerticalGrid(
+                            state = gridState,
                             columns = GridCells.Fixed(2),
                             contentPadding = PaddingValues(bottom = 120.dp),
                             horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -2555,6 +2589,7 @@ fun FolderSongsScreen(
                     }
                     GridViewMode.GRID_3 -> {
                         LazyVerticalGrid(
+                            state = gridState,
                             columns = GridCells.Fixed(3),
                             contentPadding = PaddingValues(bottom = 120.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -2572,6 +2607,7 @@ fun FolderSongsScreen(
                     }
                     GridViewMode.GRID_4 -> {
                         LazyVerticalGrid(
+                            state = gridState,
                             columns = GridCells.Fixed(4),
                             contentPadding = PaddingValues(bottom = 120.dp),
                             horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -2589,6 +2625,7 @@ fun FolderSongsScreen(
                     }
                     GridViewMode.HERO_GRID -> {
                         LazyVerticalGrid(
+                            state = gridState,
                             columns = GridCells.Fixed(2),
                             contentPadding = PaddingValues(bottom = 120.dp),
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -4406,6 +4443,8 @@ fun FilteredSongsScreen(
     onBack: () -> Unit,
     onSongMenuClick: (Song) -> Unit,
     onSongClick: (Song) -> Unit = { song -> manager.playSong(song, songs, title) },
+    listState: LazyListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() },
+    gridState: LazyGridState = rememberSaveable(saver = LazyGridState.Saver) { LazyGridState() },
     currentViewMode: GridViewMode = GridViewMode.LIST,
     extraHeaderActions: (@Composable () -> Unit)? = null
 ) {
@@ -4439,6 +4478,7 @@ fun FilteredSongsScreen(
             when (currentViewMode) {
                 GridViewMode.LIST -> {
                     LazyColumn(
+                        state = listState,
                         contentPadding = PaddingValues(bottom = 120.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
@@ -4459,6 +4499,7 @@ fun FilteredSongsScreen(
                 }
                 GridViewMode.GRID_2 -> {
                     LazyVerticalGrid(
+                        state = gridState,
                         columns = GridCells.Fixed(2),
                         contentPadding = PaddingValues(bottom = 120.dp),
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -4472,6 +4513,7 @@ fun FilteredSongsScreen(
                 }
                 GridViewMode.GRID_3 -> {
                     LazyVerticalGrid(
+                        state = gridState,
                         columns = GridCells.Fixed(3),
                         contentPadding = PaddingValues(bottom = 120.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -4485,6 +4527,7 @@ fun FilteredSongsScreen(
                 }
                 GridViewMode.GRID_4 -> {
                     LazyVerticalGrid(
+                        state = gridState,
                         columns = GridCells.Fixed(4),
                         contentPadding = PaddingValues(bottom = 120.dp),
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -4498,6 +4541,7 @@ fun FilteredSongsScreen(
                 }
                 GridViewMode.HERO_GRID -> {
                     LazyVerticalGrid(
+                        state = gridState,
                         columns = GridCells.Fixed(2),
                         contentPadding = PaddingValues(bottom = 120.dp),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),

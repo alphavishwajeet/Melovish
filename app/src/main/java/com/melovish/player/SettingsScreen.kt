@@ -32,8 +32,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -50,6 +52,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -86,6 +89,7 @@ import kotlin.math.sqrt
 @Composable
 fun SettingsScreen(
     manager: MusicManager,
+    listState: LazyListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() },
     onBackClick: () -> Unit,
     onOpenProfile: () -> Unit,
     onOpenEqualizer: () -> Unit,
@@ -147,6 +151,7 @@ fun SettingsScreen(
 
     Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
+            state = listState,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = 16.dp),
@@ -1328,6 +1333,8 @@ fun ManageHiddenFoldersFullScreen(
     val hiddenList = allFolders.filter { it in manager.hiddenFolders }
     val visibleList = allFolders.filter { it !in manager.hiddenFolders }
 
+    val hiddenFoldersListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
+
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 6.dp),
@@ -1348,6 +1355,7 @@ fun ManageHiddenFoldersFullScreen(
         }
 
         LazyColumn(
+            state = hiddenFoldersListState,
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(top = 8.dp, bottom = 80.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -1462,6 +1470,8 @@ fun ManageHiddenAudioFullScreen(
         else visibleSongs.filter { it.title.contains(q, ignoreCase = true) || it.artist.contains(q, ignoreCase = true) }
     }
 
+    val hiddenAudioListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
+
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 6.dp),
@@ -1500,6 +1510,7 @@ fun ManageHiddenAudioFullScreen(
         )
 
         LazyColumn(
+            state = hiddenAudioListState,
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(top = 8.dp, bottom = 80.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)

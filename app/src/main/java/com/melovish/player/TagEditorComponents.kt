@@ -11,6 +11,7 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -56,6 +57,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -1015,6 +1017,9 @@ fun TagEditorDialog(
     var showWheelDatePicker by remember { mutableStateOf(false) }
     var showAnalogClockPicker by remember { mutableStateOf(false) }
 
+    // Saveable persistent scroll state: Keeps form position steady across pickers and orientation changes
+    val tagEditorFormScrollState = rememberSaveable(saver = ScrollState.Saver) { ScrollState(0) }
+
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
@@ -1068,7 +1073,7 @@ fun TagEditorDialog(
                 modifier = Modifier
                     .fillMaxSize()
                     .blur(animatedTagEditorBlur)
-                    .verticalScroll(rememberScrollState())
+                    .verticalScroll(tagEditorFormScrollState)
             ) {
                 // Header
                 Row(

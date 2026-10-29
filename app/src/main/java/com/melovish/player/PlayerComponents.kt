@@ -54,6 +54,7 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -87,6 +88,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
@@ -832,6 +834,15 @@ fun FullPlayerSheet(manager: MusicManager, onDismiss: () -> Unit) {
     var isProgrammaticScroll by remember { mutableStateOf(false) }
     var isQueueReorderingActive by remember { mutableStateOf(false) }
 
+    var showMenuModal by remember { mutableStateOf(false) }
+    var showSpeedDialog by remember { mutableStateOf(false) }
+    var showSleepDialog by remember { mutableStateOf(false) }
+    var showQueueSheet by remember { mutableStateOf(false) }
+    var showEqualizerSheet by remember { mutableStateOf(false) }
+    var showTagEditorDialog by remember { mutableStateOf(false) }
+    var showLyricsDialog by remember { mutableStateOf(false) }
+    var showAddToPlaylistDialog by remember { mutableStateOf(false) }
+
     LaunchedEffect(manager.currentSong?.id, currentQueue) {
         val targetIdx = currentQueue.indexOfFirst { it.id == manager.currentSong?.id }
         if (targetIdx != -1 && targetIdx != pagerState.currentPage && !pagerState.isScrollInProgress) {
@@ -841,9 +852,9 @@ fun FullPlayerSheet(manager: MusicManager, onDismiss: () -> Unit) {
         }
     }
 
-    LaunchedEffect(pagerState, isQueueReorderingActive) {
+    LaunchedEffect(pagerState, isQueueReorderingActive, showQueueSheet) {
         snapshotFlow { pagerState.isScrollInProgress to pagerState.settledPage }.collect { (inProgress, settledPage) ->
-            if (!inProgress && !isProgrammaticScroll && !isQueueReorderingActive && settledPage in currentQueue.indices) {
+            if (!inProgress && !isProgrammaticScroll && !isQueueReorderingActive && !showQueueSheet && settledPage in currentQueue.indices) {
                 val targetSong = currentQueue[settledPage]
                 if (targetSong.id != manager.currentSong?.id) {
                     manager.playSong(targetSong, currentQueue, manager.currentSectionName)
@@ -851,15 +862,6 @@ fun FullPlayerSheet(manager: MusicManager, onDismiss: () -> Unit) {
             }
         }
     }
-
-    var showMenuModal by remember { mutableStateOf(false) }
-    var showSpeedDialog by remember { mutableStateOf(false) }
-    var showSleepDialog by remember { mutableStateOf(false) }
-    var showQueueSheet by remember { mutableStateOf(false) }
-    var showEqualizerSheet by remember { mutableStateOf(false) }
-    var showTagEditorDialog by remember { mutableStateOf(false) }
-    var showLyricsDialog by remember { mutableStateOf(false) }
-    var showAddToPlaylistDialog by remember { mutableStateOf(false) }
 
     var showSeekLeftAnim by remember { mutableStateOf(false) }
     var showSeekRightAnim by remember { mutableStateOf(false) }
@@ -1434,15 +1436,7 @@ fun FullPlayerSheet(manager: MusicManager, onDismiss: () -> Unit) {
                 onReorderStateChange = { active ->
                     isQueueReorderingActive = active
                 },
-                onItemMoved = { movedSong, newIndex ->
-                    if (movedSong.id == manager.currentSong?.id) {
-                        coroutineScope.launch {
-                            isProgrammaticScroll = true
-                            pagerState.scrollToPage(newIndex)
-                            isProgrammaticScroll = false
-                        }
-                    }
-                },
+                onItemMoved = { _, _ -> },
                 onDismiss = { showQueueSheet = false }
             )
         }
@@ -1473,7 +1467,7 @@ fun QueueSheet(
     onDismiss: () -> Unit
 ) {
     val density = LocalDensity.current
-    val listState = rememberLazyListState()
+    val listState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
 
     val itemHeightPx = with(density) { 72.dp.toPx() }
     val edgeZonePx = with(density) { 70.dp.toPx() }
@@ -1487,10 +1481,12 @@ fun QueueSheet(
     }
 
     LaunchedEffect(Unit) {
-        val curIdx = manager.playbackQueue.indexOfFirst { it.id == manager.currentSong?.id }
-        if (curIdx != -1) {
-            val targetScrollIdx = (curIdx - 1).coerceAtLeast(0)
-            listState.scrollToItem(targetScrollIdx)
+        if (listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0) {
+            val curIdx = manager.playbackQueue.indexOfFirst { it.id == manager.currentSong?.id }
+            if (curIdx != -1) {
+                val targetScrollIdx = (curIdx - 1).coerceAtLeast(0)
+                listState.scrollToItem(targetScrollIdx)
+            }
         }
     }
 
@@ -1576,13 +1572,7 @@ fun QueueSheet(
                 return Offset.Zero
             }
 
-            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
-                if (available.y > 15f && draggingSongId == null) {
-                    onDismiss()
-                    return available
-                }
-                return Offset.Zero
-            }
+            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset = available
 
             override suspend fun onPreFling(available: Velocity): Velocity {
                 if (available.y > 350f && listState.firstVisibleItemIndex == 0 && draggingSongId == null) {
@@ -1683,6 +1673,13 @@ fun QueueSheet(
                             val isBeingDragged = draggingSongId == song.id
                             var rowTopInParent by remember { mutableFloatStateOf(0f) }
 
+                            var albumArtBitmap by remember(song.id) { mutableStateOf(manager.getCachedAlbumArt(song.id)) }
+                            LaunchedEffect(song.id) {
+                                if (albumArtBitmap == null) {
+                                    albumArtBitmap = manager.loadAlbumArtAsync(song)
+                                }
+                            }
+
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -1710,31 +1707,55 @@ fun QueueSheet(
                                             manager.playSong(song, manager.playbackQueue, manager.currentSectionName)
                                         }
                                     }
-                                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                                    .padding(horizontal = 14.dp, vertical = 10.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Box(
                                     modifier = Modifier
-                                        .size(28.dp)
-                                        .clip(CircleShape)
-                                        .background(if (isCur) accent.copy(alpha = 0.25f) else Color.Transparent),
+                                        .size(44.dp)
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(Color(0xFF1E293B))
+                                        .border(
+                                            width = if (isCur) 1.5.dp else 0.8.dp,
+                                            color = if (isCur) accent else Color.White.copy(alpha = 0.20f),
+                                            shape = RoundedCornerShape(10.dp)
+                                        ),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Text(
-                                        text = if (isCur) "▶" else "•",
-                                        color = if (isCur) accent else Color(0xFF64748B),
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
+                                    if (albumArtBitmap != null) {
+                                        Image(
+                                            bitmap = albumArtBitmap!!.asImageBitmap(),
+                                            contentDescription = "Cover",
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentScale = ContentScale.Crop
+                                        )
+                                    } else {
+                                        Text("🎵", fontSize = 18.sp)
+                                    }
+
+                                    if (isCur) {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .background(Color.Black.copy(alpha = 0.45f)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            if (manager.isPlaying) {
+                                                LiveAudioWaveEqualizer(isAnimating = true, accentColor = Color.White)
+                                            } else {
+                                                Text("▶", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                                            }
+                                        }
+                                    }
                                 }
 
-                                Spacer(modifier = Modifier.width(10.dp))
+                                Spacer(modifier = Modifier.width(12.dp))
 
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
                                         text = song.title,
                                         color = if (isCur) accent else manager.getCurrentTextColor(),
-                                        fontSize = 15.sp,
+                                        fontSize = 14.5.sp,
                                         fontWeight = if (isCur) FontWeight.Bold else FontWeight.SemiBold,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
@@ -1743,7 +1764,7 @@ fun QueueSheet(
                                     Text(
                                         text = "${formatFileSize(song.size)} • ${if (song.artist.isNotBlank()) song.artist else "Unknown Artist"}",
                                         color = Color(0xFF64748B),
-                                        fontSize = 12.sp,
+                                        fontSize = 11.5.sp,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
                                     )
@@ -1821,6 +1842,8 @@ fun QueueSheet(
                                 -20f,
                                 (containerHeightPx - itemHeightPx + 40f).coerceAtLeast(0f)
                             )
+                            val draggedBmp = manager.getCachedAlbumArt(draggedSong.id)
+
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -1835,31 +1858,35 @@ fun QueueSheet(
                                     .background(accent.copy(alpha = 0.28f))
                                     .background(manager.getCurrentDialogColor())
                                     .border(1.5.dp, accent, RoundedCornerShape(18.dp))
-                                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                                    .padding(horizontal = 14.dp, vertical = 10.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Box(
                                     modifier = Modifier
-                                        .size(28.dp)
-                                        .clip(CircleShape)
-                                        .background(accent.copy(alpha = 0.35f)),
+                                        .size(44.dp)
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(Color(0xFF1E293B)),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Text(
-                                        text = "▶",
-                                        color = accent,
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
+                                    if (draggedBmp != null) {
+                                        Image(
+                                            bitmap = draggedBmp.asImageBitmap(),
+                                            contentDescription = "Cover",
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentScale = ContentScale.Crop
+                                        )
+                                    } else {
+                                        Text("🎵", fontSize = 18.sp)
+                                    }
                                 }
 
-                                Spacer(modifier = Modifier.width(10.dp))
+                                Spacer(modifier = Modifier.width(12.dp))
 
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
                                         text = draggedSong.title,
                                         color = accent,
-                                        fontSize = 15.sp,
+                                        fontSize = 14.5.sp,
                                         fontWeight = FontWeight.Bold,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
@@ -1868,7 +1895,7 @@ fun QueueSheet(
                                     Text(
                                         text = "${formatFileSize(draggedSong.size)} • ${if (draggedSong.artist.isNotBlank()) draggedSong.artist else "Unknown Artist"}",
                                         color = Color(0xFF64748B),
-                                        fontSize = 12.sp,
+                                        fontSize = 11.5.sp,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
                                     )
@@ -1913,12 +1940,13 @@ fun QueueSheet(
     }
 }
 
-// Equalizer Sheet with Frosted Glass Styling
+// Equalizer Sheet with Frosted Glass Styling & Persistent Scroll Memory
 @Composable
 fun EqualizerSheet(manager: MusicManager, onDismiss: () -> Unit) {
     val isDark = manager.isDarkMode
     val textColor = manager.getCurrentTextColor()
     val accent = manager.accentColor
+    val eqListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
 
     Box(
         modifier = Modifier
@@ -1978,6 +2006,7 @@ fun EqualizerSheet(manager: MusicManager, onDismiss: () -> Unit) {
                 Spacer(modifier = Modifier.height(14.dp))
 
                 LazyColumn(
+                    state = eqListState,
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
@@ -2596,6 +2625,7 @@ fun AddToPlaylistDialog(manager: MusicManager, song: Song, onDismiss: () -> Unit
     val accent = manager.accentColor
     var isCreatingNew by remember { mutableStateOf(false) }
     var newPlaylistName by remember { mutableStateOf("") }
+    val playlistPickerListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
 
     Box(
         modifier = Modifier
@@ -2678,7 +2708,11 @@ fun AddToPlaylistDialog(manager: MusicManager, song: Song, onDismiss: () -> Unit
                 }
 
                 Spacer(modifier = Modifier.height(14.dp))
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f, fill = false).height(240.dp)) {
+                LazyColumn(
+                    state = playlistPickerListState,
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.weight(1f, fill = false).height(240.dp)
+                ) {
                     items(
                         items = manager.customPlaylists,
                         key = { it.id },
