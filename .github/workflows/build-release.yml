@@ -64,7 +64,7 @@ jobs:
       - name: Upload Release Artifacts
         uses: actions/upload-artifact@v5
         with:
-          name: Melovish-Release-Builds
+          name: Melovish-Release-Build
           path: dist/*
           if-no-files-found: error
           retention-days: 30
