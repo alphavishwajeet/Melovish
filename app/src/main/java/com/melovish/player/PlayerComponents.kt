@@ -54,6 +54,7 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -87,6 +88,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
@@ -1473,7 +1475,7 @@ fun QueueSheet(
     onDismiss: () -> Unit
 ) {
     val density = LocalDensity.current
-    val listState = rememberLazyListState()
+    val listState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
 
     val itemHeightPx = with(density) { 72.dp.toPx() }
     val edgeZonePx = with(density) { 70.dp.toPx() }
@@ -1487,10 +1489,12 @@ fun QueueSheet(
     }
 
     LaunchedEffect(Unit) {
-        val curIdx = manager.playbackQueue.indexOfFirst { it.id == manager.currentSong?.id }
-        if (curIdx != -1) {
-            val targetScrollIdx = (curIdx - 1).coerceAtLeast(0)
-            listState.scrollToItem(targetScrollIdx)
+        if (listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0) {
+            val curIdx = manager.playbackQueue.indexOfFirst { it.id == manager.currentSong?.id }
+            if (curIdx != -1) {
+                val targetScrollIdx = (curIdx - 1).coerceAtLeast(0)
+                listState.scrollToItem(targetScrollIdx)
+            }
         }
     }
 
@@ -1576,13 +1580,7 @@ fun QueueSheet(
                 return Offset.Zero
             }
 
-            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
-                if (available.y > 15f && draggingSongId == null) {
-                    onDismiss()
-                    return available
-                }
-                return Offset.Zero
-            }
+            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset = available
 
             override suspend fun onPreFling(available: Velocity): Velocity {
                 if (available.y > 350f && listState.firstVisibleItemIndex == 0 && draggingSongId == null) {
@@ -1913,12 +1911,13 @@ fun QueueSheet(
     }
 }
 
-// Equalizer Sheet with Frosted Glass Styling
+// Equalizer Sheet with Frosted Glass Styling & Persistent Scroll Memory
 @Composable
 fun EqualizerSheet(manager: MusicManager, onDismiss: () -> Unit) {
     val isDark = manager.isDarkMode
     val textColor = manager.getCurrentTextColor()
     val accent = manager.accentColor
+    val eqListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
 
     Box(
         modifier = Modifier
@@ -1978,6 +1977,7 @@ fun EqualizerSheet(manager: MusicManager, onDismiss: () -> Unit) {
                 Spacer(modifier = Modifier.height(14.dp))
 
                 LazyColumn(
+                    state = eqListState,
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
@@ -2596,6 +2596,7 @@ fun AddToPlaylistDialog(manager: MusicManager, song: Song, onDismiss: () -> Unit
     val accent = manager.accentColor
     var isCreatingNew by remember { mutableStateOf(false) }
     var newPlaylistName by remember { mutableStateOf("") }
+    val playlistPickerListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
 
     Box(
         modifier = Modifier
@@ -2678,7 +2679,11 @@ fun AddToPlaylistDialog(manager: MusicManager, song: Song, onDismiss: () -> Unit
                 }
 
                 Spacer(modifier = Modifier.height(14.dp))
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f, fill = false).height(240.dp)) {
+                LazyColumn(
+                    state = playlistPickerListState,
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.weight(1f, fill = false).height(240.dp)
+                ) {
                     items(
                         items = manager.customPlaylists,
                         key = { it.id },

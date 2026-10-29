@@ -25,7 +25,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -38,6 +40,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -61,7 +64,11 @@ import java.util.Locale
 
 @UnstableApi
 @Composable
-fun ProfileScreen(manager: MusicManager, onBackClick: () -> Unit) {
+fun ProfileScreen(
+    manager: MusicManager,
+    listState: LazyListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() },
+    onBackClick: () -> Unit
+) {
     val isDark = manager.isDarkMode
     val textColor = manager.getCurrentTextColor()
     val cardBg = manager.getCurrentSurfaceColor()
@@ -74,6 +81,9 @@ fun ProfileScreen(manager: MusicManager, onBackClick: () -> Unit) {
     var pickedImageUri by remember { mutableStateOf<Uri?>(null) }
     var showBigPicturePreview by remember { mutableStateOf(false) }
     var viewingAllType by remember { mutableStateOf<String?>(null) }
+
+    // Persistent scroll state for expanded sub-views (Most Played / Least Played / History)
+    val expandedSubListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
 
     BackHandler(enabled = viewingAllType != null || showBigPicturePreview) {
         if (showBigPicturePreview) {
@@ -181,6 +191,7 @@ fun ProfileScreen(manager: MusicManager, onBackClick: () -> Unit) {
                 }
             } else {
                 LazyColumn(
+                    state = expandedSubListState,
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(bottom = 80.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -212,6 +223,7 @@ fun ProfileScreen(manager: MusicManager, onBackClick: () -> Unit) {
 
     Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
+            state = listState,
             modifier = Modifier
                 .fillMaxSize()
                 .blur(animatedProfileBlur)
