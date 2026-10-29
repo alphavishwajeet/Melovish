@@ -80,6 +80,7 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -1048,7 +1049,7 @@ fun ArtistsScreen(
                                 .clip(CircleShape)
                                 .background(cardBg)
                                 .border(1.2.dp, glassBorderBrush, CircleShape)
-                                .clickable { showSortMenu = true },
+                            .clickable { showSortMenu = true },
                             contentAlignment = Alignment.Center
                         ) {
                             SortListVector(tint = accentColor, modifier = Modifier.size(19.dp))
@@ -1436,6 +1437,8 @@ fun ArtistDetailScreen(
     artistItem: ArtistItem,
     manager: MusicManager,
     isDark: Boolean,
+    listState: LazyListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() },
+    gridState: LazyGridState = rememberSaveable(saver = LazyGridState.Saver) { LazyGridState() },
     onBack: () -> Unit,
     onSongMenuClick: (Song) -> Unit,
     onOpenGridSizeDialog: () -> Unit = {},
@@ -1524,7 +1527,7 @@ fun ArtistDetailScreen(
                                 .clip(CircleShape)
                                 .background(cardBg)
                                 .border(1.2.dp, glassBorderBrush, CircleShape)
-                                .clickable { showSortMenu = true },
+                            .clickable { showSortMenu = true },
                             contentAlignment = Alignment.Center
                         ) {
                             SortListVector(tint = accent, modifier = Modifier.size(18.dp))
@@ -1584,6 +1587,7 @@ fun ArtistDetailScreen(
                 when (manager.artistInnerViewMode) {
                     GridViewMode.LIST -> {
                         LazyColumn(
+                            state = listState,
                             contentPadding = PaddingValues(bottom = 80.dp),
                             verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
@@ -1604,6 +1608,7 @@ fun ArtistDetailScreen(
                     }
                     GridViewMode.GRID_2 -> {
                         LazyVerticalGrid(
+                            state = gridState,
                             columns = GridCells.Fixed(2),
                             contentPadding = PaddingValues(bottom = 80.dp),
                             horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -1627,6 +1632,7 @@ fun ArtistDetailScreen(
                     }
                     GridViewMode.GRID_3 -> {
                         LazyVerticalGrid(
+                            state = gridState,
                             columns = GridCells.Fixed(3),
                             contentPadding = PaddingValues(bottom = 80.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -1650,6 +1656,7 @@ fun ArtistDetailScreen(
                     }
                     GridViewMode.GRID_4 -> {
                         LazyVerticalGrid(
+                            state = gridState,
                             columns = GridCells.Fixed(4),
                             contentPadding = PaddingValues(bottom = 80.dp),
                             horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -1673,6 +1680,7 @@ fun ArtistDetailScreen(
                     }
                     GridViewMode.HERO_GRID -> {
                         LazyVerticalGrid(
+                            state = gridState,
                             columns = GridCells.Fixed(2),
                             contentPadding = PaddingValues(bottom = 80.dp),
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
