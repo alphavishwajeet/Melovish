@@ -3940,7 +3940,6 @@ fun FolderColourPickerDialog(
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun LibraryFolderSquareCard(
     folderName: String,
@@ -3963,10 +3962,12 @@ fun LibraryFolderSquareCard(
             .clip(RoundedCornerShape(18.dp))
             .background(cardBg)
             .border(1.2.dp, glassBorderBrush, RoundedCornerShape(18.dp))
-            .combinedClickable(
-                onClick = { onClick() },
-                onLongClick = { onLongClick() }
-            ),
+            .pointerInput(folderName) {
+                detectTapGestures(
+                    onTap = { onClick() },
+                    onLongPress = { onLongClick() }
+                )
+            },
         contentAlignment = Alignment.Center
     ) {
         Box(
