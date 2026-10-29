@@ -1437,8 +1437,8 @@ fun ArtistDetailScreen(
     artistItem: ArtistItem,
     manager: MusicManager,
     isDark: Boolean,
-    listState: LazyListState = remember { LazyListState() },
-    gridState: LazyGridState = remember { LazyGridState() },
+    listState: LazyListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() },
+    gridState: LazyGridState = rememberSaveable(saver = LazyGridState.Saver) { LazyGridState() },
     onBack: () -> Unit,
     onSongMenuClick: (Song) -> Unit,
     onOpenGridSizeDialog: () -> Unit = {},
@@ -2006,3 +2006,4 @@ fun addArtistToFavouritePlaylists(context: Context, manager: MusicManager, artis
         Toast.makeText(context, "Added '${artist.name}' to Favourite Playlists!", Toast.LENGTH_SHORT).show()
     }
 }
+
