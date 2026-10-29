@@ -2913,12 +2913,7 @@ fun ManagePlaylistsDialog(
                                         modifier = Modifier
                                             .size(34.dp)
                                             .clip(CircleShape)
-                                            .background(Color(0x1AEF4444))
-                                            .clickable {
-                                                manager.triggerHapticFeedback(true)
-                                                manager.removePlaylist(pl)
-                                                tempList.remove(pl)
-                                            },
+                                            .background(Color(0x1AEF4444)),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Text("🗑", fontSize = 14.sp)
@@ -3940,6 +3935,7 @@ fun FolderColourPickerDialog(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun LibraryFolderSquareCard(
     folderName: String,
@@ -3962,12 +3958,12 @@ fun LibraryFolderSquareCard(
             .clip(RoundedCornerShape(18.dp))
             .background(cardBg)
             .border(1.2.dp, glassBorderBrush, RoundedCornerShape(18.dp))
-            .pointerInput(folderName) {
-                detectTapGestures(
-                    onTap = { onClick() },
-                    onLongPress = { onLongClick() }
-                )
-            },
+            .combinedClickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick,
+                onLongClick = onLongClick
+            ),
         contentAlignment = Alignment.Center
     ) {
         Box(
