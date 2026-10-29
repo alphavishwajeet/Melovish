@@ -497,7 +497,7 @@ fun MelovishRootApp(manager: MusicManager) {
     var activeAddToPlaylistSong by remember { mutableStateOf<Song?>(null) }
 
     // =========================================================================
-    // 📌 HOISTED PERSISTENT SCROLL STATES (Zero-Loss across Tab & Navigation)
+    // 📌 HOISTED PERSISTENT SCROLL STATES & ISOLATED SECTION MEMORY
     // =========================================================================
 
     // Top-Level Tab States
@@ -508,17 +508,19 @@ fun MelovishRootApp(manager: MusicManager) {
     val artistsGridState = rememberSaveable(saver = LazyGridState.Saver) { LazyGridState() }
     val searchListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
 
-    // Secondary & Drill-Down Sub-Screen States
+    // Profile and Settings Screen States (Preserved upon return)
     val profileListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
     val settingsListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
-    val folderSongsListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
-    val folderSongsGridState = rememberSaveable(saver = LazyGridState.Saver) { LazyGridState() }
-    val playlistSongsListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
-    val playlistSongsGridState = rememberSaveable(saver = LazyGridState.Saver) { LazyGridState() }
-    val artistSongsListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
-    val artistSongsGridState = rememberSaveable(saver = LazyGridState.Saver) { LazyGridState() }
-    val filteredSongsListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
-    val filteredSongsGridState = rememberSaveable(saver = LazyGridState.Saver) { LazyGridState() }
+
+    // Independent Scroll States Keyed by Folder / Playlist / Artist / Album Name
+    val folderListStates = remember { mutableMapOf<String, LazyListState>() }
+    val folderGridStates = remember { mutableMapOf<String, LazyGridState>() }
+    val playlistListStates = remember { mutableMapOf<String, LazyListState>() }
+    val playlistGridStates = remember { mutableMapOf<String, LazyGridState>() }
+    val artistListStates = remember { mutableMapOf<String, LazyListState>() }
+    val artistGridStates = remember { mutableMapOf<String, LazyGridState>() }
+    val albumListStates = remember { mutableMapOf<String, LazyListState>() }
+    val albumGridStates = remember { mutableMapOf<String, LazyGridState>() }
 
     val coroutineScope = rememberCoroutineScope()
 
@@ -665,12 +667,16 @@ fun MelovishRootApp(manager: MusicManager) {
                         )
                         selectedArtist != null -> {
                             val curArtist = selectedArtist!!
+                            val artistKey = curArtist.name
+                            val curListState = artistListStates.getOrPut(artistKey) { LazyListState() }
+                            val curGridState = artistGridStates.getOrPut(artistKey) { LazyGridState() }
+
                             ArtistDetailScreen(
                                 artistItem = curArtist,
                                 manager = manager,
                                 isDark = isDark,
-                                listState = artistSongsListState,
-                                gridState = artistSongsGridState,
+                                listState = curListState,
+                                gridState = curGridState,
                                 onBack = { selectedArtist = null },
                                 onSongMenuClick = { song: Song ->
                                     rootSelectedArtistSongForAction = Pair(song, curArtist.name)
@@ -684,13 +690,17 @@ fun MelovishRootApp(manager: MusicManager) {
                             val albumSongs = remember(curAlbum, manager.allSongs.size) {
                                 manager.allSongs.filter { it.album.equals(curAlbum, ignoreCase = true) }.toImmutableList()
                             }
+                            val albumKey = curAlbum
+                            val curListState = albumListStates.getOrPut(albumKey) { LazyListState() }
+                            val curGridState = albumGridStates.getOrPut(albumKey) { LazyGridState() }
+
                             FilteredSongsScreen(
                                 title = "Album: $curAlbum",
                                 songs = albumSongs,
                                 manager = manager,
                                 isDark = isDark,
-                                listState = filteredSongsListState,
-                                gridState = filteredSongsGridState,
+                                listState = curListState,
+                                gridState = curGridState,
                                 onBack = { selectedAlbum = null },
                                 onSongMenuClick = { song: Song -> activeSongForMenu = song },
                                 onSongClick = { song -> handleSmartSongClick(song, albumSongs, "Album: $curAlbum") }
@@ -698,12 +708,16 @@ fun MelovishRootApp(manager: MusicManager) {
                         }
                         selectedPlaylist != null -> {
                             val curPlaylist = selectedPlaylist!!
+                            val playlistKey = curPlaylist.id
+                            val curListState = playlistListStates.getOrPut(playlistKey) { LazyListState() }
+                            val curGridState = playlistGridStates.getOrPut(playlistKey) { LazyGridState() }
+
                             PlaylistDetailScreen(
                                 playlist = curPlaylist,
                                 manager = manager,
                                 isDark = isDark,
-                                listState = playlistSongsListState,
-                                gridState = playlistSongsGridState,
+                                listState = curListState,
+                                gridState = curGridState,
                                 onBack = { selectedPlaylist = null },
                                 onSongMenuClick = { song: Song -> activeSongForMenu = song },
                                 onSongClick = { song, songs -> handleSmartSongClick(song, songs, curPlaylist.name) },
@@ -714,12 +728,16 @@ fun MelovishRootApp(manager: MusicManager) {
                         }
                         selectedFolder != null -> {
                             val curFolder = selectedFolder!!
+                            val folderKey = curFolder
+                            val curListState = folderListStates.getOrPut(folderKey) { LazyListState() }
+                            val curGridState = folderGridStates.getOrPut(folderKey) { LazyGridState() }
+
                             FolderSongsScreen(
                                 folderName = curFolder,
                                 manager = manager,
                                 isDark = isDark,
-                                listState = folderSongsListState,
-                                gridState = folderSongsGridState,
+                                listState = curListState,
+                                gridState = curGridState,
                                 onBack = { selectedFolder = null },
                                 onSongMenuClick = { song: Song -> activeSongForMenu = song },
                                 onSongClick = { song, songs -> handleSmartSongClick(song, songs, curFolder) },
@@ -794,6 +812,44 @@ fun MelovishRootApp(manager: MusicManager) {
                                     }
                                 }
                             } else {
+                                // Full exit to another tab: reset sub-screens & scroll state to start fresh from top
+                                when (activeScreen) {
+                                    "library" -> {
+                                        folderListStates.clear()
+                                        folderGridStates.clear()
+                                        coroutineScope.launch {
+                                            libraryListState.scrollToItem(0)
+                                            libraryGridState.scrollToItem(0)
+                                        }
+                                    }
+                                    "artists" -> {
+                                        artistListStates.clear()
+                                        artistGridStates.clear()
+                                        coroutineScope.launch {
+                                            artistsListState.scrollToItem(0)
+                                            artistsGridState.scrollToItem(0)
+                                        }
+                                    }
+                                    "home" -> {
+                                        playlistListStates.clear()
+                                        playlistGridStates.clear()
+                                        albumListStates.clear()
+                                        albumGridStates.clear()
+                                        coroutineScope.launch {
+                                            homeListState.scrollToItem(0)
+                                        }
+                                    }
+                                    "search" -> {
+                                        coroutineScope.launch {
+                                            searchListState.scrollToItem(0)
+                                        }
+                                    }
+                                }
+                                selectedFolder = null
+                                selectedPlaylist = null
+                                selectedArtist = null
+                                selectedAlbum = null
+
                                 isTopBarVisible = true
                                 activeScreen = tab
                             }
@@ -1593,266 +1649,266 @@ fun HomeScreen(
                                     .background(cardBg)
                                     .border(1.2.dp, glassBorderBrush, CircleShape)
                                     .clickable { showSortMenu = true },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                SortListVector(tint = accent, modifier = Modifier.size(18.dp))
+                            }
+
+                            GlassmorphicDropdownMenu(
+                                expanded = showSortMenu,
+                                onDismissRequest = { showSortMenu = false },
+                                manager = manager
+                            ) {
+                                listOf(
+                                    Pair("A to Z", SongSortOrder.A_TO_Z),
+                                    Pair("Z to A", SongSortOrder.Z_TO_A),
+                                    Pair("Newest First", SongSortOrder.NEWEST),
+                                    Pair("Oldest First", SongSortOrder.OLDEST),
+                                    Pair("By Artist", SongSortOrder.ARTIST),
+                                    Pair("By File Size", SongSortOrder.FILE_SIZE),
+                                    Pair("By Duration", SongSortOrder.DURATION)
+                                ).forEach { (label, order) ->
+                                    GlassDropdownMenuItem(
+                                        text = label,
+                                        isSelected = manager.currentSortOrder == order,
+                                        manager = manager,
+                                        onClick = {
+                                            manager.setPersistentSongSort(order)
+                                            showSortMenu = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.width(6.dp))
+
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(cardBg)
+                                .border(1.2.dp, glassBorderBrush, CircleShape)
+                                .clickable {
+                                    val shuffled = sortedSongs.shuffled()
+                                    if (shuffled.isNotEmpty()) {
+                                        manager.triggerHapticFeedback(true)
+                                        onSongClick(shuffled.first(), shuffled)
+                                    }
+                                },
                             contentAlignment = Alignment.Center
                         ) {
-                            SortListVector(tint = accent, modifier = Modifier.size(18.dp))
+                            ShuffleActionVector(tint = accent, modifier = Modifier.size(20.dp))
                         }
+                    }
+                }
+            }
 
-                        GlassmorphicDropdownMenu(
-                            expanded = showSortMenu,
-                            onDismissRequest = { showSortMenu = false },
-                            manager = manager
-                        ) {
-                            listOf(
-                                Pair("A to Z", SongSortOrder.A_TO_Z),
-                                Pair("Z to A", SongSortOrder.Z_TO_A),
-                                Pair("Newest First", SongSortOrder.NEWEST),
-                                Pair("Oldest First", SongSortOrder.OLDEST),
-                                Pair("By Artist", SongSortOrder.ARTIST),
-                                Pair("By File Size", SongSortOrder.FILE_SIZE),
-                                Pair("By Duration", SongSortOrder.DURATION)
-                            ).forEach { (label, order) ->
-                                GlassDropdownMenuItem(
-                                    text = label,
-                                    isSelected = manager.currentSortOrder == order,
-                                    manager = manager,
-                                    onClick = {
-                                        manager.setPersistentSongSort(order)
-                                        showSortMenu = false
-                                    }
-                                )
+            if (showSkeleton) {
+                when (manager.homeViewMode) {
+                    GridViewMode.LIST -> items(8) { ShimmerSkeletonRow(isDark = isDark) }
+                    GridViewMode.GRID_2 -> items(4) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Box(modifier = Modifier.weight(1f)) { ShimmerSkeletonGridItem(aspectRatio = 1f, isDark = isDark) }
+                            Box(modifier = Modifier.weight(1f)) { ShimmerSkeletonGridItem(aspectRatio = 1f, isDark = isDark) }
+                        }
+                    }
+                    GridViewMode.GRID_3 -> items(4) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            for (i in 0 until 3) {
+                                Box(modifier = Modifier.weight(1f)) { ShimmerSkeletonGridItem(aspectRatio = 1f, isDark = isDark) }
                             }
                         }
                     }
-
-                    Spacer(modifier = Modifier.width(6.dp))
-
+                    GridViewMode.GRID_4 -> items(4) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            for (i in 0 until 4) {
+                                Box(modifier = Modifier.weight(1f)) { ShimmerSkeletonGridItem(aspectRatio = 1f, isDark = isDark) }
+                            }
+                        }
+                    }
+                    GridViewMode.HERO_GRID -> items(3) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Box(modifier = Modifier.weight(1f)) { ShimmerSkeletonGridItem(aspectRatio = 1f, isDark = isDark, isHero = true) }
+                            Box(modifier = Modifier.weight(1f)) { ShimmerSkeletonGridItem(aspectRatio = 1f, isDark = isDark, isHero = true) }
+                        }
+                    }
+                }
+            } else if (sortedSongs.isEmpty()) {
+                item(key = "home_empty_state", contentType = "empty_state") {
                     Box(
                         modifier = Modifier
-                            .size(36.dp)
-                            .clip(CircleShape)
+                            .fillMaxWidth()
+                            .padding(vertical = 32.dp)
+                            .clip(RoundedCornerShape(20.dp))
                             .background(cardBg)
-                            .border(1.2.dp, glassBorderBrush, CircleShape)
-                            .clickable {
-                                val shuffled = sortedSongs.shuffled()
-                                if (shuffled.isNotEmpty()) {
-                                    manager.triggerHapticFeedback(true)
-                                    onSongClick(shuffled.first(), shuffled)
-                                }
-                            },
+                            .border(1.2.dp, glassBorderBrush, RoundedCornerShape(20.dp))
+                            .padding(28.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        ShuffleActionVector(tint = accent, modifier = Modifier.size(20.dp))
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Text(text = "🎵", fontSize = 42.sp)
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = "No Audio Files Found",
+                                color = textColor,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "Add MP3 or audio files to your device storage to see them here.",
+                                color = Color(0xFF64748B),
+                                fontSize = 13.sp,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+                }
+            } else {
+                when (manager.homeViewMode) {
+                    GridViewMode.LIST -> {
+                        items(
+                            items = sortedSongs,
+                            key = { it.id },
+                            contentType = { "home_song_row" }
+                        ) { song ->
+                            UniversalSongRow(
+                                song = song,
+                                manager = manager,
+                                isDark = isDark,
+                                onPlay = { onSongClick(song, sortedSongs) },
+                                onMenuClick = { onSongMenuClick(song) }
+                            )
+                        }
+                    }
+                    GridViewMode.GRID_2 -> {
+                        items(
+                            items = chunkedGrid2,
+                            key = { it.first().id }
+                        ) { rowSongs ->
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                rowSongs.forEach { song ->
+                                    Box(modifier = Modifier.weight(1f)) {
+                                        SquareAlbumOverlayCard(
+                                            song = song,
+                                            manager = manager,
+                                            isDark = isDark,
+                                            onPlay = { onSongClick(song, sortedSongs) },
+                                            onMenuClick = { onSongMenuClick(song) }
+                                        )
+                                    }
+                                }
+                                if (rowSongs.size == 1) Spacer(modifier = Modifier.weight(1f))
+                            }
+                        }
+                    }
+                    GridViewMode.GRID_3 -> {
+                        items(
+                            items = chunkedGrid3,
+                            key = { it.first().id }
+                        ) { rowSongs ->
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                rowSongs.forEach { song ->
+                                    Box(modifier = Modifier.weight(1f)) {
+                                        SquareAlbumOverlayCard(
+                                            song = song,
+                                            manager = manager,
+                                            isDark = isDark,
+                                            onPlay = { onSongClick(song, sortedSongs) },
+                                            onMenuClick = { onSongMenuClick(song) }
+                                        )
+                                    }
+                                }
+                                for (i in rowSongs.size until 3) Spacer(modifier = Modifier.weight(1f))
+                            }
+                        }
+                    }
+                    GridViewMode.GRID_4 -> {
+                        items(
+                            items = chunkedGrid4,
+                            key = { it.first().id }
+                        ) { rowSongs ->
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                rowSongs.forEach { song ->
+                                    Box(modifier = Modifier.weight(1f)) {
+                                        SquareAlbumOverlayCard(
+                                            song = song,
+                                            manager = manager,
+                                            isDark = isDark,
+                                            onPlay = { onSongClick(song, sortedSongs) },
+                                            onMenuClick = { onSongMenuClick(song) }
+                                        )
+                                    }
+                                }
+                                for (i in rowSongs.size until 4) Spacer(modifier = Modifier.weight(1f))
+                            }
+                        }
+                    }
+                    GridViewMode.HERO_GRID -> {
+                        items(
+                            items = chunkedGrid2,
+                            key = { it.first().id }
+                        ) { rowSongs ->
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                rowSongs.forEach { song ->
+                                    Box(modifier = Modifier.weight(1f)) {
+                                        HeroAlbumCard(
+                                            song = song,
+                                            manager = manager,
+                                            isDark = isDark,
+                                            onPlay = { onSongClick(song, sortedSongs) },
+                                            onMenuClick = { onSongMenuClick(song) }
+                                        )
+                                    }
+                                }
+                                if (rowSongs.size == 1) Spacer(modifier = Modifier.weight(1f))
+                            }
+                        }
                     }
                 }
             }
         }
 
-        if (showSkeleton) {
-            when (manager.homeViewMode) {
-                GridViewMode.LIST -> items(8) { ShimmerSkeletonRow(isDark = isDark) }
-                GridViewMode.GRID_2 -> items(4) {
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Box(modifier = Modifier.weight(1f)) { ShimmerSkeletonGridItem(aspectRatio = 1f, isDark = isDark) }
-                        Box(modifier = Modifier.weight(1f)) { ShimmerSkeletonGridItem(aspectRatio = 1f, isDark = isDark) }
-                    }
-                }
-                GridViewMode.GRID_3 -> items(4) {
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        for (i in 0 until 3) {
-                            Box(modifier = Modifier.weight(1f)) { ShimmerSkeletonGridItem(aspectRatio = 1f, isDark = isDark) }
-                        }
-                    }
-                }
-                GridViewMode.GRID_4 -> items(4) {
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        for (i in 0 until 4) {
-                            Box(modifier = Modifier.weight(1f)) { ShimmerSkeletonGridItem(aspectRatio = 1f, isDark = isDark) }
-                        }
-                    }
-                }
-                GridViewMode.HERO_GRID -> items(3) {
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Box(modifier = Modifier.weight(1f)) { ShimmerSkeletonGridItem(aspectRatio = 1f, isDark = isDark, isHero = true) }
-                        Box(modifier = Modifier.weight(1f)) { ShimmerSkeletonGridItem(aspectRatio = 1f, isDark = isDark, isHero = true) }
-                    }
-                }
-            }
-        } else if (sortedSongs.isEmpty()) {
-            item(key = "home_empty_state", contentType = "empty_state") {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 32.dp)
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(cardBg)
-                        .border(1.2.dp, glassBorderBrush, RoundedCornerShape(20.dp))
-                        .padding(28.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Text(text = "🎵", fontSize = 42.sp)
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Text(
-                            text = "No Audio Files Found",
-                            color = textColor,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = "Add MP3 or audio files to your device storage to see them here.",
-                            color = Color(0xFF64748B),
-                            fontSize = 13.sp,
-                            textAlign = TextAlign.Center
-                        )
-                    }
-                }
-            }
-        } else {
-            when (manager.homeViewMode) {
-                GridViewMode.LIST -> {
-                    items(
-                        items = sortedSongs,
-                        key = { it.id },
-                        contentType = { "home_song_row" }
-                    ) { song ->
-                        UniversalSongRow(
-                            song = song,
-                            manager = manager,
-                            isDark = isDark,
-                            onPlay = { onSongClick(song, sortedSongs) },
-                            onMenuClick = { onSongMenuClick(song) }
-                        )
-                    }
-                }
-                GridViewMode.GRID_2 -> {
-                    items(
-                        items = chunkedGrid2,
-                        key = { it.first().id }
-                    ) { rowSongs ->
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            rowSongs.forEach { song ->
-                                Box(modifier = Modifier.weight(1f)) {
-                                    SquareAlbumOverlayCard(
-                                        song = song,
-                                        manager = manager,
-                                        isDark = isDark,
-                                        onPlay = { onSongClick(song, sortedSongs) },
-                                        onMenuClick = { onSongMenuClick(song) }
-                                    )
-                                }
-                            }
-                            if (rowSongs.size == 1) Spacer(modifier = Modifier.weight(1f))
-                        }
-                    }
-                }
-                GridViewMode.GRID_3 -> {
-                    items(
-                        items = chunkedGrid3,
-                        key = { it.first().id }
-                    ) { rowSongs ->
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            rowSongs.forEach { song ->
-                                Box(modifier = Modifier.weight(1f)) {
-                                    SquareAlbumOverlayCard(
-                                        song = song,
-                                        manager = manager,
-                                        isDark = isDark,
-                                        onPlay = { onSongClick(song, sortedSongs) },
-                                        onMenuClick = { onSongMenuClick(song) }
-                                    )
-                                }
-                            }
-                            for (i in rowSongs.size until 3) Spacer(modifier = Modifier.weight(1f))
-                        }
-                    }
-                }
-                GridViewMode.GRID_4 -> {
-                    items(
-                        items = chunkedGrid4,
-                        key = { it.first().id }
-                    ) { rowSongs ->
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            rowSongs.forEach { song ->
-                                Box(modifier = Modifier.weight(1f)) {
-                                    SquareAlbumOverlayCard(
-                                        song = song,
-                                        manager = manager,
-                                        isDark = isDark,
-                                        onPlay = { onSongClick(song, sortedSongs) },
-                                        onMenuClick = { onSongMenuClick(song) }
-                                    )
-                                }
-                            }
-                            for (i in rowSongs.size until 4) Spacer(modifier = Modifier.weight(1f))
-                        }
-                    }
-                }
-                GridViewMode.HERO_GRID -> {
-                    items(
-                        items = chunkedGrid2,
-                        key = { it.first().id }
-                    ) { rowSongs ->
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            rowSongs.forEach { song ->
-                                Box(modifier = Modifier.weight(1f)) {
-                                    HeroAlbumCard(
-                                        song = song,
-                                        manager = manager,
-                                        isDark = isDark,
-                                        onPlay = { onSongClick(song, sortedSongs) },
-                                        onMenuClick = { onSongMenuClick(song) }
-                                    )
-                                }
-                            }
-                            if (rowSongs.size == 1) Spacer(modifier = Modifier.weight(1f))
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    if (manager.currentSong == null && !showSkeleton && sortedSongs.isNotEmpty()) {
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(bottom = 18.dp, end = 18.dp)
-                .size(58.dp)
-                .shadow(
-                    elevation = 8.dp,
-                    shape = CircleShape,
-                    spotColor = manager.accentColor
-                )
-                .clip(CircleShape)
-                .background(manager.accentColor)
-                .border(1.5.dp, Color.White.copy(alpha = 0.35f), CircleShape)
-                .clickable {
-                    manager.triggerHapticFeedback(true)
-                    onResumeClick()
-                },
-            contentAlignment = Alignment.Center
-        ) {
-            Canvas(
+        if (manager.currentSong == null && !showSkeleton && sortedSongs.isNotEmpty()) {
+            Box(
                 modifier = Modifier
-                    .size(24.dp)
-                    .offset(x = 1.5.dp)
+                    .align(Alignment.BottomEnd)
+                    .padding(bottom = 18.dp, end = 18.dp)
+                    .size(58.dp)
+                    .shadow(
+                        elevation = 8.dp,
+                        shape = CircleShape,
+                        spotColor = manager.accentColor
+                    )
+                    .clip(CircleShape)
+                    .background(manager.accentColor)
+                    .border(1.5.dp, Color.White.copy(alpha = 0.35f), CircleShape)
+                    .clickable {
+                        manager.triggerHapticFeedback(true)
+                        onResumeClick()
+                    },
+                contentAlignment = Alignment.Center
             ) {
-                val path = Path().apply {
-                    moveTo(size.width * 0.18f, size.height * 0.12f)
-                    lineTo(size.width * 0.88f, size.height * 0.50f)
-                    lineTo(size.width * 0.18f, size.height * 0.88f)
-                    close()
+                Canvas(
+                    modifier = Modifier
+                        .size(24.dp)
+                        .offset(x = 1.5.dp)
+                ) {
+                    val path = Path().apply {
+                        moveTo(size.width * 0.18f, size.height * 0.12f)
+                        lineTo(size.width * 0.88f, size.height * 0.50f)
+                        lineTo(size.width * 0.18f, size.height * 0.88f)
+                        close()
+                    }
+                    drawPath(path, color = Color.White)
                 }
-                drawPath(path, color = Color.White)
             }
         }
     }
-}
 }
 
 // =========================================================================
@@ -1919,7 +1975,7 @@ fun LibraryScreen(
                                 .clip(CircleShape)
                                 .background(cardBg)
                                 .border(1.2.dp, glassBorderBrush, CircleShape)
-                                .clickable { showFolderSortMenu = true },
+                            .clickable { showFolderSortMenu = true },
                             contentAlignment = Alignment.Center
                         ) {
                             SortListVector(tint = accent, modifier = Modifier.size(18.dp))
@@ -2176,8 +2232,8 @@ fun PlaylistDetailScreen(
     onSongMenuClick: (Song) -> Unit,
     onSongClick: (Song, List<Song>) -> Unit,
     onFolderClick: (String) -> Unit,
-    listState: LazyListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() },
-    gridState: LazyGridState = rememberSaveable(saver = LazyGridState.Saver) { LazyGridState() },
+    listState: LazyListState,
+    gridState: LazyGridState,
     onOpenGridSizeDialog: () -> Unit = {},
     onOpenAddSongsDialog: () -> Unit = {}
 ) {
@@ -2428,8 +2484,8 @@ fun FolderSongsScreen(
     onBack: () -> Unit,
     onSongMenuClick: (Song) -> Unit,
     onSongClick: (Song, List<Song>) -> Unit,
-    listState: LazyListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() },
-    gridState: LazyGridState = rememberSaveable(saver = LazyGridState.Saver) { LazyGridState() },
+    listState: LazyListState,
+    gridState: LazyGridState,
     onOpenGridSizeDialog: () -> Unit = {}
 ) {
     val rawSongs = remember(folderName, manager.allSongs.size) { manager.allSongs.filter { it.folderName == folderName } }
@@ -4443,8 +4499,8 @@ fun FilteredSongsScreen(
     onBack: () -> Unit,
     onSongMenuClick: (Song) -> Unit,
     onSongClick: (Song) -> Unit = { song -> manager.playSong(song, songs, title) },
-    listState: LazyListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() },
-    gridState: LazyGridState = rememberSaveable(saver = LazyGridState.Saver) { LazyGridState() },
+    listState: LazyListState,
+    gridState: LazyGridState,
     currentViewMode: GridViewMode = GridViewMode.LIST,
     extraHeaderActions: (@Composable () -> Unit)? = null
 ) {
