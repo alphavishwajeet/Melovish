@@ -834,6 +834,15 @@ fun FullPlayerSheet(manager: MusicManager, onDismiss: () -> Unit) {
     var isProgrammaticScroll by remember { mutableStateOf(false) }
     var isQueueReorderingActive by remember { mutableStateOf(false) }
 
+    var showMenuModal by remember { mutableStateOf(false) }
+    var showSpeedDialog by remember { mutableStateOf(false) }
+    var showSleepDialog by remember { mutableStateOf(false) }
+    var showQueueSheet by remember { mutableStateOf(false) }
+    var showEqualizerSheet by remember { mutableStateOf(false) }
+    var showTagEditorDialog by remember { mutableStateOf(false) }
+    var showLyricsDialog by remember { mutableStateOf(false) }
+    var showAddToPlaylistDialog by remember { mutableStateOf(false) }
+
     LaunchedEffect(manager.currentSong?.id, currentQueue) {
         val targetIdx = currentQueue.indexOfFirst { it.id == manager.currentSong?.id }
         if (targetIdx != -1 && targetIdx != pagerState.currentPage && !pagerState.isScrollInProgress) {
@@ -843,9 +852,9 @@ fun FullPlayerSheet(manager: MusicManager, onDismiss: () -> Unit) {
         }
     }
 
-    LaunchedEffect(pagerState, isQueueReorderingActive) {
+    LaunchedEffect(pagerState, isQueueReorderingActive, showQueueSheet) {
         snapshotFlow { pagerState.isScrollInProgress to pagerState.settledPage }.collect { (inProgress, settledPage) ->
-            if (!inProgress && !isProgrammaticScroll && !isQueueReorderingActive && settledPage in currentQueue.indices) {
+            if (!inProgress && !isProgrammaticScroll && !isQueueReorderingActive && !showQueueSheet && settledPage in currentQueue.indices) {
                 val targetSong = currentQueue[settledPage]
                 if (targetSong.id != manager.currentSong?.id) {
                     manager.playSong(targetSong, currentQueue, manager.currentSectionName)
@@ -853,15 +862,6 @@ fun FullPlayerSheet(manager: MusicManager, onDismiss: () -> Unit) {
             }
         }
     }
-
-    var showMenuModal by remember { mutableStateOf(false) }
-    var showSpeedDialog by remember { mutableStateOf(false) }
-    var showSleepDialog by remember { mutableStateOf(false) }
-    var showQueueSheet by remember { mutableStateOf(false) }
-    var showEqualizerSheet by remember { mutableStateOf(false) }
-    var showTagEditorDialog by remember { mutableStateOf(false) }
-    var showLyricsDialog by remember { mutableStateOf(false) }
-    var showAddToPlaylistDialog by remember { mutableStateOf(false) }
 
     var showSeekLeftAnim by remember { mutableStateOf(false) }
     var showSeekRightAnim by remember { mutableStateOf(false) }
@@ -1436,15 +1436,7 @@ fun FullPlayerSheet(manager: MusicManager, onDismiss: () -> Unit) {
                 onReorderStateChange = { active ->
                     isQueueReorderingActive = active
                 },
-                onItemMoved = { movedSong, newIndex ->
-                    if (movedSong.id == manager.currentSong?.id) {
-                        coroutineScope.launch {
-                            isProgrammaticScroll = true
-                            pagerState.scrollToPage(newIndex)
-                            isProgrammaticScroll = false
-                        }
-                    }
-                },
+                onItemMoved = { _, _ -> },
                 onDismiss = { showQueueSheet = false }
             )
         }
@@ -1718,7 +1710,6 @@ fun QueueSheet(
                                     .padding(horizontal = 14.dp, vertical = 10.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                // 🎵 Album Artwork for Queue Item with Current Playing Indicator Overlay
                                 Box(
                                     modifier = Modifier
                                         .size(44.dp)
