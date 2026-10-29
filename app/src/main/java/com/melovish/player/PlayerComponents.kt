@@ -1681,6 +1681,13 @@ fun QueueSheet(
                             val isBeingDragged = draggingSongId == song.id
                             var rowTopInParent by remember { mutableFloatStateOf(0f) }
 
+                            var albumArtBitmap by remember(song.id) { mutableStateOf(manager.getCachedAlbumArt(song.id)) }
+                            LaunchedEffect(song.id) {
+                                if (albumArtBitmap == null) {
+                                    albumArtBitmap = manager.loadAlbumArtAsync(song)
+                                }
+                            }
+
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -1708,31 +1715,56 @@ fun QueueSheet(
                                             manager.playSong(song, manager.playbackQueue, manager.currentSectionName)
                                         }
                                     }
-                                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                                    .padding(horizontal = 14.dp, vertical = 10.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
+                                // 🎵 Album Artwork for Queue Item with Current Playing Indicator Overlay
                                 Box(
                                     modifier = Modifier
-                                        .size(28.dp)
-                                        .clip(CircleShape)
-                                        .background(if (isCur) accent.copy(alpha = 0.25f) else Color.Transparent),
+                                        .size(44.dp)
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(Color(0xFF1E293B))
+                                        .border(
+                                            width = if (isCur) 1.5.dp else 0.8.dp,
+                                            color = if (isCur) accent else Color.White.copy(alpha = 0.20f),
+                                            shape = RoundedCornerShape(10.dp)
+                                        ),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Text(
-                                        text = if (isCur) "▶" else "•",
-                                        color = if (isCur) accent else Color(0xFF64748B),
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
+                                    if (albumArtBitmap != null) {
+                                        Image(
+                                            bitmap = albumArtBitmap!!.asImageBitmap(),
+                                            contentDescription = "Cover",
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentScale = ContentScale.Crop
+                                        )
+                                    } else {
+                                        Text("🎵", fontSize = 18.sp)
+                                    }
+
+                                    if (isCur) {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .background(Color.Black.copy(alpha = 0.45f)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            if (manager.isPlaying) {
+                                                LiveAudioWaveEqualizer(isAnimating = true, accentColor = Color.White)
+                                            } else {
+                                                Text("▶", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                                            }
+                                        }
+                                    }
                                 }
 
-                                Spacer(modifier = Modifier.width(10.dp))
+                                Spacer(modifier = Modifier.width(12.dp))
 
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
                                         text = song.title,
                                         color = if (isCur) accent else manager.getCurrentTextColor(),
-                                        fontSize = 15.sp,
+                                        fontSize = 14.5.sp,
                                         fontWeight = if (isCur) FontWeight.Bold else FontWeight.SemiBold,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
@@ -1741,7 +1773,7 @@ fun QueueSheet(
                                     Text(
                                         text = "${formatFileSize(song.size)} • ${if (song.artist.isNotBlank()) song.artist else "Unknown Artist"}",
                                         color = Color(0xFF64748B),
-                                        fontSize = 12.sp,
+                                        fontSize = 11.5.sp,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
                                     )
@@ -1819,6 +1851,8 @@ fun QueueSheet(
                                 -20f,
                                 (containerHeightPx - itemHeightPx + 40f).coerceAtLeast(0f)
                             )
+                            val draggedBmp = manager.getCachedAlbumArt(draggedSong.id)
+
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -1833,31 +1867,35 @@ fun QueueSheet(
                                     .background(accent.copy(alpha = 0.28f))
                                     .background(manager.getCurrentDialogColor())
                                     .border(1.5.dp, accent, RoundedCornerShape(18.dp))
-                                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                                    .padding(horizontal = 14.dp, vertical = 10.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Box(
                                     modifier = Modifier
-                                        .size(28.dp)
-                                        .clip(CircleShape)
-                                        .background(accent.copy(alpha = 0.35f)),
+                                        .size(44.dp)
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(Color(0xFF1E293B)),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Text(
-                                        text = "▶",
-                                        color = accent,
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
+                                    if (draggedBmp != null) {
+                                        Image(
+                                            bitmap = draggedBmp.asImageBitmap(),
+                                            contentDescription = "Cover",
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentScale = ContentScale.Crop
+                                        )
+                                    } else {
+                                        Text("🎵", fontSize = 18.sp)
+                                    }
                                 }
 
-                                Spacer(modifier = Modifier.width(10.dp))
+                                Spacer(modifier = Modifier.width(12.dp))
 
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
                                         text = draggedSong.title,
                                         color = accent,
-                                        fontSize = 15.sp,
+                                        fontSize = 14.5.sp,
                                         fontWeight = FontWeight.Bold,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
@@ -1866,7 +1904,7 @@ fun QueueSheet(
                                     Text(
                                         text = "${formatFileSize(draggedSong.size)} • ${if (draggedSong.artist.isNotBlank()) draggedSong.artist else "Unknown Artist"}",
                                         color = Color(0xFF64748B),
-                                        fontSize = 12.sp,
+                                        fontSize = 11.5.sp,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
                                     )
