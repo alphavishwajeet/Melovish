@@ -497,30 +497,70 @@ fun MelovishRootApp(manager: MusicManager) {
     var activeAddToPlaylistSong by remember { mutableStateOf<Song?>(null) }
 
     // =========================================================================
-    // 📌 HOISTED PERSISTENT SCROLL STATES (Zero-Loss across Tab & Navigation)
+    // 📌 INDEPENDENT SCOPED & LIFECYCLE-AWARE SCROLL STATES
     // =========================================================================
 
     // Top-Level Tab States
-    val homeListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
-    val libraryListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
-    val libraryGridState = rememberSaveable(saver = LazyGridState.Saver) { LazyGridState() }
-    val artistsListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
-    val artistsGridState = rememberSaveable(saver = LazyGridState.Saver) { LazyGridState() }
-    val searchListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
+    val homeListState = remember { LazyListState() }
+    val libraryListState = remember { LazyListState() }
+    val libraryGridState = remember { LazyGridState() }
+    val artistsListState = remember { LazyListState() }
+    val artistsGridState = remember { LazyGridState() }
+    val searchListState = remember { LazyListState() }
 
-    // Secondary & Drill-Down Sub-Screen States
-    val profileListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
-    val settingsListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
-    val folderSongsListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
-    val folderSongsGridState = rememberSaveable(saver = LazyGridState.Saver) { LazyGridState() }
-    val playlistSongsListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
-    val playlistSongsGridState = rememberSaveable(saver = LazyGridState.Saver) { LazyGridState() }
-    val artistSongsListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
-    val artistSongsGridState = rememberSaveable(saver = LazyGridState.Saver) { LazyGridState() }
-    val filteredSongsListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
-    val filteredSongsGridState = rememberSaveable(saver = LazyGridState.Saver) { LazyGridState() }
+    // Sub-Screen Fixed States
+    val profileListState = remember { LazyListState() }
+    val settingsListState = remember { LazyListState() }
+    val filteredSongsListState = remember { LazyListState() }
+    val filteredSongsGridState = remember { LazyGridState() }
+
+    // Keyed Independent States for Each Folder, Playlist, and Artist
+    val folderListStates = remember { mutableMapOf<String, LazyListState>() }
+    val folderGridStates = remember { mutableMapOf<String, LazyGridState>() }
+    val playlistListStates = remember { mutableMapOf<String, LazyListState>() }
+    val playlistGridStates = remember { mutableMapOf<String, LazyGridState>() }
+    val artistListStates = remember { mutableMapOf<String, LazyListState>() }
+    val artistGridStates = remember { mutableMapOf<String, LazyGridState>() }
 
     val coroutineScope = rememberCoroutineScope()
+
+    // Lifecycle Watcher: Resets scroll positions when completely leaving a section/tab
+    var lastRecordedActiveScreen by remember { mutableStateOf(activeScreen) }
+    LaunchedEffect(activeScreen, selectedFolder, selectedPlaylist, selectedArtist, selectedAlbum) {
+        if (lastRecordedActiveScreen != activeScreen) {
+            when (lastRecordedActiveScreen) {
+                "profile" -> {
+                    profileListState.scrollToItem(0)
+                }
+                "settings" -> {
+                    settingsListState.scrollToItem(0)
+                }
+                "library" -> {
+                    if (selectedFolder == null) {
+                        folderListStates.clear()
+                        folderGridStates.clear()
+                        libraryListState.scrollToItem(0)
+                        libraryGridState.scrollToItem(0)
+                    }
+                }
+                "artists" -> {
+                    if (selectedArtist == null) {
+                        artistListStates.clear()
+                        artistGridStates.clear()
+                        artistsListState.scrollToItem(0)
+                        artistsGridState.scrollToItem(0)
+                    }
+                }
+                "home" -> {
+                    if (selectedPlaylist == null) {
+                        playlistListStates.clear()
+                        playlistGridStates.clear()
+                    }
+                }
+            }
+            lastRecordedActiveScreen = activeScreen
+        }
+    }
 
     var isTopBarVisible by remember { mutableStateOf(true) }
     val isMainTabScreen = activeScreen in listOf("home", "library", "artists", "search") &&
@@ -577,9 +617,11 @@ fun MelovishRootApp(manager: MusicManager) {
             isSettingsEqOpen -> isSettingsEqOpen = false
             isPlayerExpanded -> isPlayerExpanded = false
             activeScreen == "settings" -> {
+                coroutineScope.launch { settingsListState.scrollToItem(0) }
                 activeScreen = if (previousActiveScreen != "settings") previousActiveScreen else "home"
             }
             activeScreen == "profile" -> {
+                coroutineScope.launch { profileListState.scrollToItem(0) }
                 activeScreen = if (previousActiveScreen != "profile") previousActiveScreen else "home"
             }
             selectedArtist != null -> selectedArtist = null
@@ -645,6 +687,7 @@ fun MelovishRootApp(manager: MusicManager) {
                             manager = manager,
                             listState = settingsListState,
                             onBackClick = {
+                                coroutineScope.launch { settingsListState.scrollToItem(0) }
                                 activeScreen = if (previousActiveScreen != "settings") previousActiveScreen else "home"
                             },
                             onOpenProfile = {
@@ -660,17 +703,20 @@ fun MelovishRootApp(manager: MusicManager) {
                             manager = manager,
                             listState = profileListState,
                             onBackClick = {
+                                coroutineScope.launch { profileListState.scrollToItem(0) }
                                 activeScreen = if (previousActiveScreen != "profile") previousActiveScreen else "home"
                             }
                         )
                         selectedArtist != null -> {
                             val curArtist = selectedArtist!!
+                            val curArtistListState = artistListStates.getOrPut(curArtist.name) { LazyListState() }
+                            val curArtistGridState = artistGridStates.getOrPut(curArtist.name) { LazyGridState() }
                             ArtistDetailScreen(
                                 artistItem = curArtist,
                                 manager = manager,
                                 isDark = isDark,
-                                listState = artistSongsListState,
-                                gridState = artistSongsGridState,
+                                listState = curArtistListState,
+                                gridState = curArtistGridState,
                                 onBack = { selectedArtist = null },
                                 onSongMenuClick = { song: Song ->
                                     rootSelectedArtistSongForAction = Pair(song, curArtist.name)
@@ -698,12 +744,14 @@ fun MelovishRootApp(manager: MusicManager) {
                         }
                         selectedPlaylist != null -> {
                             val curPlaylist = selectedPlaylist!!
+                            val curPlaylistListState = playlistListStates.getOrPut(curPlaylist.id) { LazyListState() }
+                            val curPlaylistGridState = playlistGridStates.getOrPut(curPlaylist.id) { LazyGridState() }
                             PlaylistDetailScreen(
                                 playlist = curPlaylist,
                                 manager = manager,
                                 isDark = isDark,
-                                listState = playlistSongsListState,
-                                gridState = playlistSongsGridState,
+                                listState = curPlaylistListState,
+                                gridState = curPlaylistGridState,
                                 onBack = { selectedPlaylist = null },
                                 onSongMenuClick = { song: Song -> activeSongForMenu = song },
                                 onSongClick = { song, songs -> handleSmartSongClick(song, songs, curPlaylist.name) },
@@ -714,12 +762,14 @@ fun MelovishRootApp(manager: MusicManager) {
                         }
                         selectedFolder != null -> {
                             val curFolder = selectedFolder!!
+                            val curFolderListState = folderListStates.getOrPut(curFolder) { LazyListState() }
+                            val curFolderGridState = folderGridStates.getOrPut(curFolder) { LazyGridState() }
                             FolderSongsScreen(
                                 folderName = curFolder,
                                 manager = manager,
                                 isDark = isDark,
-                                listState = folderSongsListState,
-                                gridState = folderSongsGridState,
+                                listState = curFolderListState,
+                                gridState = curFolderGridState,
                                 onBack = { selectedFolder = null },
                                 onSongMenuClick = { song: Song -> activeSongForMenu = song },
                                 onSongClick = { song, songs -> handleSmartSongClick(song, songs, curFolder) },
@@ -1903,7 +1953,7 @@ fun LibraryScreen(
                             .border(1.2.dp, glassBorderBrush, CircleShape)
                             .combinedClickable(
                                 onClick = { manager.cycleNextLibraryFoldersViewMode() },
-                                onLongClick = onOpenGridSizeDialog
+                                onOpenGridSizeDialog = onOpenGridSizeDialog
                             ),
                         contentAlignment = Alignment.Center
                     ) {
