@@ -293,6 +293,9 @@ class MusicManager(val context: Context) {
     var isInitialLoading by mutableStateOf(true)
     private var hasPendingScanRequest = false
 
+    // Persistent total song count to avoid the 250-to-full number jump on cold start
+    var totalSongsCount by mutableIntStateOf(prefs.getInt("total_library_song_count", 0))
+
     // Debounced automatic MediaStore real-time observation
     private var mediaStoreObserverDebounceJob: Job? = null
     private val mediaStoreObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
@@ -815,6 +818,16 @@ class MusicManager(val context: Context) {
     }
 
     private fun setupPlayerListener() {
+        // Register AudioManager focus listener for transient call interruptions
+        try {
+            @Suppress("DEPRECATION")
+            audioManager.requestAudioFocus(
+                audioFocusChangeListener,
+                AudioManager.STREAM_MUSIC,
+                AudioManager.AUDIOFOCUS_GAIN
+            )
+        } catch (_: Exception) {}
+
         player.addListener(object : Player.Listener {
             override fun onAudioSessionIdChanged(audioSessionId: Int) {
                 if (audioSessionId != C.AUDIO_SESSION_ID_UNSET && audioSessionId != 0) {
@@ -825,8 +838,11 @@ class MusicManager(val context: Context) {
             override fun onIsPlayingChanged(playing: Boolean) {
                 isPlaying = playing
                 updateNotification()
-                if (playing && isFadeOnStart && !isCrossfadeEnabled && player.currentPosition <= 1200L) {
-                    triggerFadeIn(1000L)
+                if (playing) {
+                    shouldResumeAfterCall = false
+                    if (isFadeOnStart && !isCrossfadeEnabled && player.currentPosition <= 1200L) {
+                        triggerFadeIn(1000L)
+                    }
                 }
             }
 
@@ -1844,6 +1860,7 @@ class MusicManager(val context: Context) {
                         allSongs.clear()
                         allSongs.addAll(visibleSongs)
                     }
+                    totalSongsCount = visibleSongs.size
                     refreshHistory()
                     customPlaylists.clear()
                     customPlaylists.addAll(updatedPlaylists)
@@ -1852,6 +1869,7 @@ class MusicManager(val context: Context) {
 
                 savePlaylists()
                 persistSongsCache(visibleSongs)
+                prefs.edit().putInt("total_library_song_count", visibleSongs.size).apply()
 
                 ArtistDataManager.init(context)
                 val parsed = withContext(Dispatchers.Default) {
@@ -1908,6 +1926,7 @@ class MusicManager(val context: Context) {
         currentPosition = initialPositionMs
         duration = song.duration
         isPlaying = true
+        shouldResumeAfterCall = false
 
         val isSameQueue = currentSectionName == section &&
                 playbackQueue.size == queue.size &&
@@ -2701,6 +2720,11 @@ class MusicManager(val context: Context) {
             rawStorageSongs.removeAll { it.id == song.id }
             playbackQueue.removeAll { it.id == song.id }
             historySongs.removeAll { it.id == song.id }
+
+            if (totalSongsCount > 0) {
+                totalSongsCount--
+                prefs.edit().putInt("total_library_song_count", totalSongsCount).apply()
+            }
 
             refreshArtistsInBackground()
             true
